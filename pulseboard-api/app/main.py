@@ -10,7 +10,7 @@ from app.models.entities import Base, User, Project, Task, WebhookEvent
 from app.schemas import ProjectIn, TaskIn, WebhookIn
 from app.core.security import verify_password,create_token,token_user,hash_password
 from app.core.config import settings
-from app.events import publish
+from app.events import publish,subscribe,unsubscribe
 from app.worker import task_created_notification
 from app.metrics import REQUESTS,LATENCY,metrics_response
 oauth=OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -18,8 +18,16 @@ oauth=OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 async def lifespan(app):
     async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
     async with Session() as db:
-        if not (await db.execute(select(User).where(User.email=="demo@pulseboard.local"))).scalar_one_or_none():
-            db.add(User(email="demo@pulseboard.local",password_hash=hash_password("ChangeMe123!"),tenant_id="demo",role="owner")); await db.commit()
+        user=(await db.execute(select(User).where(User.email=="demo@pulseboard.local"))).scalar_one_or_none()
+        if not user:
+            user=User(email="demo@pulseboard.local",password_hash=hash_password("ChangeMe123!"),tenant_id="demo",role="owner")
+            db.add(user); await db.flush()
+        project=(await db.execute(select(Project).where(Project.tenant_id=="demo",Project.name=="Portfolio Demo"))).scalar_one_or_none()
+        if not project:
+            project=Project(tenant_id="demo",name="Portfolio Demo",description="Sample SaaS project for exploring the API.")
+            db.add(project); await db.flush()
+            db.add(Task(tenant_id="demo",project_id=project.id,title="Explore the API endpoints",created_by=user.id))
+        await db.commit()
     yield
 app=FastAPI(title="Pulseboard API",version="1.0.0",description="Multi-tenant task SaaS demo",lifespan=lifespan)
 @app.middleware("http")
@@ -33,7 +41,10 @@ def live(): return {"status":"ok"}
 @app.get("/health/ready")
 async def ready(db:AsyncSession=Depends(get_db)):
     try:
-        await db.execute(text("SELECT 1")); r=Redis.from_url(settings.redis_url); await r.ping(); await r.aclose(); return {"status":"ready"}
+        await db.execute(text("SELECT 1"))
+        if settings.redis_url:
+            r=Redis.from_url(settings.redis_url); await r.ping(); await r.aclose()
+        return {"status":"ready"}
     except Exception as exc: raise HTTPException(503,"dependency unavailable") from exc
 async def current_user(token:str=Depends(oauth),db:AsyncSession=Depends(get_db)):
     try: uid=token_user(token)
@@ -65,7 +76,9 @@ async def create_task(data:TaskIn,user:User=Depends(current_user),db:AsyncSessio
     project=await db.get(Project,data.project_id)
     if not project or project.tenant_id!=user.tenant_id: raise HTTPException(404,"Project not found")
     item=Task(tenant_id=user.tenant_id,project_id=data.project_id,title=data.title,created_by=user.id); db.add(item); await db.commit(); await db.refresh(item)
-    task_created_notification.delay(item.id); await publish(user.tenant_id,{"type":"task.created","task_id":item.id,"title":item.title}); return {"id":item.id,"title":item.title,"status":item.status}
+    if settings.celery_eager: task_created_notification.run(item.id)
+    else: task_created_notification.delay(item.id)
+    await publish(user.tenant_id,{"type":"task.created","task_id":item.id,"title":item.title}); return {"id":item.id,"title":item.title,"status":item.status}
 @app.post("/api/v1/webhooks/demo")
 async def webhook(data:WebhookIn,x_signature:str=Header(),idempotency_key:str=Header(alias="Idempotency-Key"),user:User=Depends(owner),db:AsyncSession=Depends(get_db)):
     raw=json.dumps(data.model_dump(),separators=(",",":"),sort_keys=True).encode(); expected=hmac.new(settings.webhook_secret.encode(),raw,hashlib.sha256).hexdigest()
@@ -79,7 +92,16 @@ async def event_socket(ws:WebSocket,token:str):
     except ValueError: await ws.close(code=4401); return
     async with Session() as db: user=await db.get(User,uid)
     if not user: await ws.close(code=4401); return
-    await ws.accept(); r=Redis.from_url(settings.redis_url,decode_responses=True); pubsub=r.pubsub(); await pubsub.subscribe(f"tenant:{user.tenant_id}:events")
+    await ws.accept()
+    if not settings.redis_url:
+        queue=subscribe(user.tenant_id)
+        try:
+            await ws.send_json({"type":"connected","tenant_id":user.tenant_id})
+            while True: await ws.send_text(await queue.get())
+        except WebSocketDisconnect: pass
+        finally: unsubscribe(user.tenant_id,queue)
+        return
+    r=Redis.from_url(settings.redis_url,decode_responses=True); pubsub=r.pubsub(); await pubsub.subscribe(f"tenant:{user.tenant_id}:events")
     try:
         await ws.send_json({"type":"connected","tenant_id":user.tenant_id})
         async for message in pubsub.listen():

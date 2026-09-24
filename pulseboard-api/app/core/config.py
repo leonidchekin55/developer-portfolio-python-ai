@@ -7,4 +7,5 @@ class Settings(BaseSettings):
     database_url:str="sqlite+aiosqlite:///./pulseboard.db"
     redis_url:str="redis://localhost:6379/0"
     celery_broker_url:str="redis://localhost:6379/1"
+    celery_eager:bool=False
 settings=Settings()

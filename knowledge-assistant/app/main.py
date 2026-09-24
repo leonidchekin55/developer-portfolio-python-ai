@@ -9,21 +9,34 @@ from sqlalchemy import select,text
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 from app.config import settings
-from app.models import Base,Document,ChatMessage
+from app.models import Base,Document,ChatMessage,DocumentChunk
 from app.db import engine,Session,get_db
-from app.rag import index_document,ask
+from app.rag import index_document,ask,_term_weights
 @asynccontextmanager
 async def lifespan(app):
  async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
  Path(settings.upload_dir).mkdir(parents=True,exist_ok=True)
+ if settings.rag_mode=="extractive":
+  async with Session() as db:
+   if not (await db.execute(select(Document).limit(1))).scalar_one_or_none():
+    filename="demo-guide.txt"
+    sample="Knowbase принимает PDF, DOCX и TXT. При загрузке документ разбивается на фрагменты, а ответы содержат имя файла и номер страницы. В бесплатном демо поиск выполняется локально по словам и показывает исходный фрагмент без внешней языковой модели. Полная локальная версия использует Qdrant и Ollama для embeddings и генерации ответов."
+    doc=Document(filename=filename,status="indexed",chunk_count=1); db.add(doc); await db.flush()
+    db.add(DocumentChunk(document_id=doc.id,page=1,chunk_index=0,text=sample,terms_json=json.dumps(_term_weights(sample),ensure_ascii=False)))
+    await db.commit()
  yield
 app=FastAPI(title="Knowledge Assistant",version="1.0.0",lifespan=lifespan)
 @app.get("/health/live")
 def live(): return {"status":"ok"}
+@app.get("/api/v1/mode")
+def mode(): return {"rag_mode":settings.rag_mode}
 @app.get("/health/ready")
 async def ready(db:AsyncSession=Depends(get_db)):
  try:
-  await db.execute(text("SELECT 1")); r=Redis.from_url(settings.redis_url); await r.ping(); await r.aclose(); return {"status":"ready"}
+  await db.execute(text("SELECT 1"))
+  if settings.redis_url:
+   r=Redis.from_url(settings.redis_url); await r.ping(); await r.aclose()
+  return {"status":"ready"}
  except Exception as e: raise HTTPException(503,"dependency unavailable") from e
 @app.post("/api/v1/documents")
 async def upload(file:UploadFile=File(...),db:AsyncSession=Depends(get_db)):
@@ -37,6 +50,8 @@ async def upload(file:UploadFile=File(...),db:AsyncSession=Depends(get_db)):
   count=await index_document(doc.id,safe_name,path); doc.chunk_count=count; doc.status="indexed" if count else "empty"
  except Exception as e:
   doc.status="failed"; await db.commit(); raise HTTPException(502,f"Indexing failed: {type(e).__name__}") from e
+ finally:
+  path.unlink(missing_ok=True)
  await db.commit(); return {"id":doc.id,"filename":doc.filename,"status":doc.status,"chunks":doc.chunk_count}
 @app.get("/api/v1/documents")
 async def documents(db:AsyncSession=Depends(get_db)):

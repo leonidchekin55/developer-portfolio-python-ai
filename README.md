@@ -11,4 +11,6 @@
 
 ## Render
 
-В корне находится [render.yaml](./render.yaml) для развёртывания обоих проектов, общей PostgreSQL/Redis, Qdrant и Ollama. Инструкция и требования — в [Render deployment guide](./RENDER.md).
+Для бесплатного онлайн-демо используйте [render-free.yaml](./render-free.yaml): он создаёт два бесплатных веб-сервиса без платных баз, дисков, очередей или AI-моделей. Подробности и ограничения — в [Render deployment guide](./RENDER.md).
+
+Полный локальный стек с PostgreSQL, Redis, Celery, Qdrant и Ollama запускается через Docker Compose из каждого проекта. Платный облачный вариант описан отдельно в [render.yaml](./render.yaml).

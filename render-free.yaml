@@ -1,0 +1,42 @@
+version: "1"
+
+# Free preview profile. Unlike render.yaml, this blueprint creates no managed
+# databases, Redis, workers, Qdrant, Ollama, or persistent disks.
+services:
+  - type: web
+    name: portfolio-pulseboard-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./pulseboard-api/Dockerfile
+    dockerContext: ./pulseboard-api
+    healthCheckPath: /health/ready
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: REDIS_URL
+        value: ""
+      - key: CELERY_EAGER
+        value: "true"
+
+  - type: web
+    name: portfolio-knowledge-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./knowledge-assistant/Dockerfile
+    dockerContext: ./knowledge-assistant
+    healthCheckPath: /health/ready
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./knowledge.db
+      - key: REDIS_URL
+        value: ""
+      - key: RAG_MODE
+        value: extractive
+      - key: UPLOAD_DIR
+        value: /tmp/knowledge-uploads
+      - key: MAX_UPLOAD_MB
+        value: "10"
