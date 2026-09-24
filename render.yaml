@@ -1,0 +1,127 @@
+version: "1"
+
+services:
+  - type: web
+    name: portfolio-pulseboard-api
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./pulseboard-api/Dockerfile
+    dockerContext: ./pulseboard-api
+    healthCheckPath: /health/ready
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: portfolio-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: portfolio-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: portfolio-redis
+          type: keyvalue
+          property: connectionString
+
+  - type: worker
+    name: portfolio-pulseboard-worker
+    runtime: docker
+    plan: 0.5c-512mb
+    dockerfilePath: ./pulseboard-api/Dockerfile
+    dockerContext: ./pulseboard-api
+    dockerCommand: celery -A app.worker.celery_app worker --loglevel=info
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: portfolio-redis
+          type: keyvalue
+          property: connectionString
+
+  - type: web
+    name: portfolio-knowledge-assistant
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./knowledge-assistant/Dockerfile
+    dockerContext: ./knowledge-assistant
+    healthCheckPath: /health/ready
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: portfolio-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: portfolio-redis
+          type: keyvalue
+          property: connectionString
+      - key: QDRANT_HOSTPORT
+        fromService:
+          name: portfolio-qdrant
+          type: pserv
+          property: hostport
+      - key: OLLAMA_HOSTPORT
+        fromService:
+          name: portfolio-ollama
+          type: pserv
+          property: hostport
+      - key: LLM_MODEL
+        value: llama3.2:1b
+      - key: EMBED_MODEL
+        value: nomic-embed-text
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: MAX_UPLOAD_MB
+        value: "20"
+    disk:
+      name: knowledge-uploads
+      mountPath: /var/data/uploads
+      sizeGB: 5
+
+  - type: pserv
+    name: portfolio-qdrant
+    runtime: image
+    plan: 1c-2g
+    image:
+      url: qdrant/qdrant:v1.19.1
+    disk:
+      name: qdrant-data
+      mountPath: /qdrant/storage
+      sizeGB: 10
+
+  - type: pserv
+    name: portfolio-ollama
+    runtime: image
+    plan: 2c-4g
+    image:
+      url: ollama/ollama:0.34.3
+    disk:
+      name: ollama-models
+      mountPath: /root/.ollama
+      sizeGB: 20
+    initialDeployHook: ollama pull llama3.2:1b && ollama pull nomic-embed-text
+
+  - type: keyvalue
+    name: portfolio-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: "off"
+
+databases:
+  - name: portfolio-db
+    plan: free
+    databaseName: portfolio
+    user: portfolio
+    postgresMajorVersion: "16"
+    diskSizeGB: 1

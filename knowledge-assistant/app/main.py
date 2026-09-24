@@ -2,6 +2,8 @@ import json,os
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI,UploadFile,File,HTTPException,Depends
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel,Field
 from sqlalchemy import select,text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,3 +51,9 @@ async def chat(data:Question,db:AsyncSession=Depends(get_db)):
 async def history(limit:int=20,db:AsyncSession=Depends(get_db)):
  rows=await db.execute(select(ChatMessage).order_by(ChatMessage.id.desc()).limit(max(1,min(limit,100))))
  return [{"id":m.id,"question":m.question,"answer":m.answer,"sources":json.loads(m.sources_json),"created_at":m.created_at.isoformat()} for m in rows.scalars()]
+
+web_dist=Path(__file__).resolve().parent.parent/"web"/"dist"
+if web_dist.exists():
+ app.mount("/assets",StaticFiles(directory=web_dist/"assets"),name="assets")
+ @app.get("/",include_in_schema=False)
+ async def frontend(): return FileResponse(web_dist/"index.html")
