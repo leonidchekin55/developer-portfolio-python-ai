@@ -1,0 +1,51 @@
+import json,os
+from pathlib import Path
+from contextlib import asynccontextmanager
+from fastapi import FastAPI,UploadFile,File,HTTPException,Depends
+from pydantic import BaseModel,Field
+from sqlalchemy import select,text
+from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
+from app.config import settings
+from app.models import Base,Document,ChatMessage
+from app.db import engine,Session,get_db
+from app.rag import index_document,ask
+@asynccontextmanager
+async def lifespan(app):
+ async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
+ Path(settings.upload_dir).mkdir(parents=True,exist_ok=True)
+ yield
+app=FastAPI(title="Knowledge Assistant",version="1.0.0",lifespan=lifespan)
+@app.get("/health/live")
+def live(): return {"status":"ok"}
+@app.get("/health/ready")
+async def ready(db:AsyncSession=Depends(get_db)):
+ try:
+  await db.execute(text("SELECT 1")); r=Redis.from_url(settings.redis_url); await r.ping(); await r.aclose(); return {"status":"ready"}
+ except Exception as e: raise HTTPException(503,"dependency unavailable") from e
+@app.post("/api/v1/documents")
+async def upload(file:UploadFile=File(...),db:AsyncSession=Depends(get_db)):
+ ext=Path(file.filename or "").suffix.lower()
+ if ext not in {".pdf",".docx",".txt"}: raise HTTPException(415,"Supported formats: PDF, DOCX, TXT")
+ content=await file.read(settings.max_upload_mb*1024*1024+1)
+ if len(content)>settings.max_upload_mb*1024*1024: raise HTTPException(413,"File exceeds upload limit")
+ safe_name=Path(file.filename or "upload").name; path=Path(settings.upload_dir)/f"{os.urandom(8).hex()}_{safe_name}"; path.write_bytes(content)
+ doc=Document(filename=safe_name,status="indexing"); db.add(doc); await db.commit(); await db.refresh(doc)
+ try:
+  count=await index_document(doc.id,safe_name,path); doc.chunk_count=count; doc.status="indexed" if count else "empty"
+ except Exception as e:
+  doc.status="failed"; await db.commit(); raise HTTPException(502,f"Indexing failed: {type(e).__name__}") from e
+ await db.commit(); return {"id":doc.id,"filename":doc.filename,"status":doc.status,"chunks":doc.chunk_count}
+@app.get("/api/v1/documents")
+async def documents(db:AsyncSession=Depends(get_db)):
+ rows=await db.execute(select(Document).order_by(Document.id.desc())); return [{"id":d.id,"filename":d.filename,"status":d.status,"chunks":d.chunk_count,"created_at":d.created_at.isoformat()} for d in rows.scalars()]
+class Question(BaseModel): question:str=Field(min_length=3,max_length=2000)
+@app.post("/api/v1/chat")
+async def chat(data:Question,db:AsyncSession=Depends(get_db)):
+ try: answer,sources=await ask(data.question)
+ except Exception as e: raise HTTPException(502,f"RAG request failed: {type(e).__name__}") from e
+ db.add(ChatMessage(question=data.question,answer=answer,sources_json=json.dumps(sources,ensure_ascii=False))); await db.commit(); return {"answer":answer,"sources":sources}
+@app.get("/api/v1/history")
+async def history(limit:int=20,db:AsyncSession=Depends(get_db)):
+ rows=await db.execute(select(ChatMessage).order_by(ChatMessage.id.desc()).limit(max(1,min(limit,100))))
+ return [{"id":m.id,"question":m.question,"answer":m.answer,"sources":json.loads(m.sources_json),"created_at":m.created_at.isoformat()} for m in rows.scalars()]
