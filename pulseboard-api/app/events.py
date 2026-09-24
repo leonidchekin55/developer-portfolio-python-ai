@@ -1,7 +1,10 @@
 import asyncio
 import json
 from collections import defaultdict
+
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
+
 from app.core.config import settings
 
 _subscribers: dict[str, set[asyncio.Queue[str]]] = defaultdict(set)
@@ -29,6 +32,6 @@ async def publish(tenant_id:str,event:dict):
         client=Redis.from_url(settings.redis_url,decode_responses=True)
         await client.publish(f"tenant:{tenant_id}:events",payload)
         await client.aclose()
-    except Exception:
+    except RedisError:
         # Event delivery is best-effort in the demo; durable outbox is recommended for production.
         return

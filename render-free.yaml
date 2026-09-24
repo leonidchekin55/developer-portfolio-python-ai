@@ -17,6 +17,8 @@ services:
         generateValue: true
       - key: WEBHOOK_SECRET
         generateValue: true
+      - key: DEMO_PASSWORD
+        generateValue: true
       - key: REDIS_URL
         value: ""
       - key: CELERY_EAGER

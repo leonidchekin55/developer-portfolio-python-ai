@@ -4,11 +4,7 @@
 
 ## Бесплатный демо-запуск
 
-Для запуска без обязательных платных ресурсов используйте `render-free.yaml`, а не `render.yaml`:
-
-1. Откройте [Render Blueprints](https://dashboard.render.com/blueprints) и выберите подключение GitHub-репозитория `leonidchekin55/developer-portfolio-python-ai`.
-2. В настройках Blueprint укажите файл конфигурации `render-free.yaml`.
-3. Проверьте, что оба веб-сервиса используют план **Free**, затем создайте Blueprint.
+Бесплатный Blueprint `developer-portfolio-free` уже подключён к GitHub-репозиторию `leonidchekin55/developer-portfolio-python-ai`. Он разворачивает два сервиса: Pulseboard и Knowledge Assistant. Повторно создавать Blueprint не нужно.
 
 Демо использует SQLite внутри бесплатного контейнера. При остановке или перезапуске Render локальные файлы удаляются, поэтому учётные записи и загруженные документы могут сброситься. Pulseboard выполняет демонстрационную задачу сразу и рассылает события в памяти одного процесса. Knowledge Assistant в облаке выполняет извлекающий поиск по текстовым фрагментам и показывает источники; генерация Ollama и Qdrant доступны в локальном полном режиме.
 
@@ -16,11 +12,9 @@
 
 ## Публикация
 
-1. Создайте GitHub-репозиторий и загрузите в него всё содержимое этой папки `outputs/` (включая корневой `render.yaml`). В текущем локальном репозитории ещё нет настроенного Git remote.
-2. Подключите GitHub к Render и выберите **New → Blueprint**.
-3. Выберите созданный репозиторий и проверьте список ресурсов и расчёт стоимости на экране Render.
-4. Подтвердите создание Blueprint. Render соберёт Docker-образы, создаст сервисы и выдаст адреса `onrender.com`.
-5. Дождитесь завершения первоначальной загрузки моделей Ollama. На первом запуске это может занять время.
+1. Проверьте приватный репозиторий [developer-portfolio-python-ai](https://github.com/leonidchekin55/developer-portfolio-python-ai).
+2. Откройте активный Blueprint [developer-portfolio-free в Render](https://dashboard.render.com/blueprint/exs-daqqpst9fdbs73c1b1tg).
+3. Следите за новыми деплоями в Blueprint; актуальные адреса демо приведены в корневом README.
 
 Render Blueprints создаются из подключённого Git-репозитория. После подключения Render может автоматически собирать новые коммиты в ветке Blueprint.
 
@@ -31,7 +25,7 @@ PostgreSQL и Redis в Blueprint используют бесплатные пл�
 ## После запуска
 
 - Knowledge Assistant: откройте его `onrender.com` адрес; `/docs` содержит API, `/health/ready` — статус готовности.
-- Pulseboard API: `/docs`; демо-пользователь `demo@pulseboard.local` / `ChangeMe123!`.
-- Перед публичной демонстрацией замените демо-пароль и проверьте секреты. Для Pulseboard `SECRET_KEY` и `WEBHOOK_SECRET` Render генерирует автоматически.
+- Pulseboard API: `/docs`; имя демо-пользователя — `demo@pulseboard.local`. Пароль хранится в Render как сгенерированный секрет `DEMO_PASSWORD`, а не в коде.
+- Для Pulseboard `SECRET_KEY`, `WEBHOOK_SECRET` и `DEMO_PASSWORD` Render генерирует автоматически.
 
 Blueprint готовит демо-среду. Перед реальным использованием добавьте изоляцию пользователей в Knowledge Assistant и настройте политику удаления загруженных документов.

@@ -1,18 +1,32 @@
-import hashlib,hmac,json,time
+import hashlib
+import hmac
+import json
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Response
+
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from redis.asyncio import Redis
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from redis.asyncio import Redis
-from app.db import engine, Session, get_db
-from app.models.entities import Base, User, Project, Task, WebhookEvent
-from app.schemas import ProjectIn, TaskIn, WebhookIn
-from app.core.security import verify_password,create_token,token_user,hash_password
+
 from app.core.config import settings
-from app.events import publish,subscribe,unsubscribe
+from app.core.security import create_token, hash_password, token_user, verify_password
+from app.db import Session, engine, get_db
+from app.events import publish, subscribe, unsubscribe
+from app.metrics import LATENCY, REQUESTS, metrics_response
+from app.models.entities import Base, Project, Task, User, WebhookEvent
+from app.schemas import ProjectIn, TaskIn, WebhookIn
 from app.worker import task_created_notification
-from app.metrics import REQUESTS,LATENCY,metrics_response
+
 oauth=OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 @asynccontextmanager
 async def lifespan(app):
@@ -20,10 +34,15 @@ async def lifespan(app):
     async with Session() as db:
         user=(await db.execute(select(User).where(User.email=="demo@pulseboard.local"))).scalar_one_or_none()
         if not user:
-            user=User(email="demo@pulseboard.local",password_hash=hash_password("ChangeMe123!"),tenant_id="demo",role="owner")
-            db.add(user); await db.flush()
+            demo_password = settings.demo_password
+            if not demo_password and settings.app_env != "production":
+                demo_password = "ChangeMe123!"
+            if demo_password:
+                user=User(email="demo@pulseboard.local",password_hash=hash_password(demo_password),tenant_id="demo",role="owner")
+                db.add(user)
+                await db.flush()
         project=(await db.execute(select(Project).where(Project.tenant_id=="demo",Project.name=="Portfolio Demo"))).scalar_one_or_none()
-        if not project:
+        if not project and user:
             project=Project(tenant_id="demo",name="Portfolio Demo",description="Sample SaaS project for exploring the API.")
             db.add(project); await db.flush()
             db.add(Task(tenant_id="demo",project_id=project.id,title="Explore the API endpoints",created_by=user.id))
@@ -58,7 +77,7 @@ async def owner(user:User=Depends(current_user)):
 @app.post("/api/v1/auth/token")
 async def login(form:OAuth2PasswordRequestForm=Depends(),db:AsyncSession=Depends(get_db)):
     user=(await db.execute(select(User).where(User.email==form.username))).scalar_one_or_none()
-    if not user or not verify_password(form.password,user.password_hash): raise HTTPException(401,"Incorrect email or password")
+    if not user or not user.active or not verify_password(form.password,user.password_hash): raise HTTPException(401,"Incorrect email or password")
     return {"access_token":create_token(user.id),"token_type":"bearer","role":user.role}
 @app.get("/api/v1/me")
 def me(user:User=Depends(current_user)): return {"id":user.id,"email":user.email,"tenant_id":user.tenant_id,"role":user.role}
@@ -73,8 +92,8 @@ async def tasks(user:User=Depends(current_user),db:AsyncSession=Depends(get_db))
     rows=await db.execute(select(Task).where(Task.tenant_id==user.tenant_id)); return [{"id":t.id,"project_id":t.project_id,"title":t.title,"status":t.status} for t in rows.scalars()]
 @app.post("/api/v1/tasks",status_code=201)
 async def create_task(data:TaskIn,user:User=Depends(current_user),db:AsyncSession=Depends(get_db)):
-    project=await db.get(Project,data.project_id)
-    if not project or project.tenant_id!=user.tenant_id: raise HTTPException(404,"Project not found")
+    project=(await db.execute(select(Project).where(Project.id==data.project_id,Project.tenant_id==user.tenant_id))).scalar_one_or_none()
+    if not project: raise HTTPException(404,"Project not found")
     item=Task(tenant_id=user.tenant_id,project_id=data.project_id,title=data.title,created_by=user.id); db.add(item); await db.commit(); await db.refresh(item)
     if settings.celery_eager: task_created_notification.run(item.id)
     else: task_created_notification.delay(item.id)
