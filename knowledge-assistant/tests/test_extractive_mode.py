@@ -97,6 +97,11 @@ def test_openrouter_answer_supports_structured_content_and_think_tags():
     assert rag._openrouter_answer(message) == "PDF, DOCX и TXT. [Источник 1]"
 
 
+def test_openrouter_rejects_safety_status_as_an_answer():
+    assert not rag._is_usable_openrouter_answer("User Safety: safe")
+    assert rag._is_usable_openrouter_answer("PDF, DOCX и TXT. [Источник 1]")
+
+
 def test_openrouter_empty_answer_falls_back_to_source(monkeypatch):
     monkeypatch.setattr(rag.settings, "openrouter_api_key", "test-secret")
     monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
@@ -108,7 +113,7 @@ def test_openrouter_empty_answer_falls_back_to_source(monkeypatch):
             pass
 
         def json(self):
-            return {"choices": [{"message": {"content": "", "reasoning": "private chain"}}]}
+            return {"choices": [{"message": {"content": "User Safety: safe"}}]}
 
     class FakeClient:
         async def __aenter__(self):

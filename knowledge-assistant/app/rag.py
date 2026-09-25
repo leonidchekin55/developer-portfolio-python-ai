@@ -39,6 +39,15 @@ def _openrouter_answer(message: dict) -> str:
     return content.strip()
 
 
+def _is_usable_openrouter_answer(answer: str) -> bool:
+    if len(answer) < 12 or len(answer) > 4000:
+        return False
+    lowered = answer.lower()
+    if any(marker in lowered for marker in ("user safety:", "let me think", "thinking process", "analyze user input")):
+        return False
+    return "[источник " in lowered or "[source " in lowered
+
+
 def effective_rag_mode() -> str:
     if settings.rag_mode == "groq":
         return "openrouter" if settings.openrouter_api_key.strip() else "extractive"
@@ -180,7 +189,7 @@ async def _ask_openrouter(question: str):
         response.raise_for_status()
     message = response.json()["choices"][0]["message"]
     answer = _openrouter_answer(message)
-    if not answer:
+    if not _is_usable_openrouter_answer(answer):
         # Keep the demo useful if a free model returns reasoning-only output
         # or an unsupported response shape.
         answer = f"В документе найден подходящий фрагмент:\n\n«{sources[0]['text']}»\n\n[Источник 1]"
