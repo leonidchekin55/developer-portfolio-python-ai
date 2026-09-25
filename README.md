@@ -9,7 +9,7 @@ Two runnable portfolio projects covering multi-tenant API design and document-gr
 | **Pulseboard API** — SaaS projects and tasks | [Open API](https://portfolio-pulseboard-demo.onrender.com) | [Swagger UI](https://portfolio-pulseboard-demo.onrender.com/docs) |
 | **Knowledge Assistant** — document search with cited sources | [Open app](https://portfolio-knowledge-demo.onrender.com) | [Swagger UI](https://portfolio-knowledge-demo.onrender.com/docs) |
 
-The hosted instances run on Render Free. They may sleep when idle and their SQLite data can reset. The hosted Knowledge Assistant uses lexical retrieval and an optional OpenRouter free-model route; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
+The hosted instances run on Render Free, may sleep when idle, and can reset ephemeral data. Knowledge Assistant's code supports PostgreSQL through `DATABASE_URL`, but the current Render service is still on its last successful release: the Supabase connection has not yet passed authentication. Until that deployment succeeds, do not rely on account or history persistence. The hosted assistant uses lexical retrieval and an optional OpenRouter free-model route; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
 
 ## Product previews
 
@@ -47,7 +47,7 @@ The hosted instances run on Render Free. They may sleep when idle and their SQLi
 ```mermaid
 flowchart LR
   Browser[React / Swagger UI] --> API[FastAPI]
-  API --> DB[(PostgreSQL locally / SQLite demo)]
+  API --> DB[(PostgreSQL configured / SQLite fallback)]
   API --> Redis[(Redis locally)]
   Redis --> Worker[Celery worker]
   API --> Metrics[Prometheus metrics]
@@ -97,4 +97,4 @@ The root [GitHub Actions workflow](./.github/workflows/ci.yml) runs backend test
 - [Render deployment guide](./RENDER.md)
 - [Free Render Blueprint](./render-free.yaml)
 
-This is a portfolio demonstration, not a production service. The free hosted demos are intentionally small and disposable; each project README describes the security and operational work needed before real customer data is used.
+This is a portfolio demonstration, not a production service. The free hosted demos are intentionally small; each project README describes the security and operational work needed before real customer data is used.

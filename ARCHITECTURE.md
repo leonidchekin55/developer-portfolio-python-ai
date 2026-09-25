@@ -1,6 +1,6 @@
 # Architecture and design notes
 
-This portfolio contains two independent services. Pulseboard focuses on backend engineering; Knowledge Assistant demonstrates document ingestion and retrieval. The hosted profile deliberately trades persistence and model quality for a zero-cost demo. Local Compose keeps the richer architecture visible and runnable.
+This portfolio contains two independent services. Pulseboard focuses on backend engineering; Knowledge Assistant demonstrates document ingestion and retrieval. The hosted profile keeps the demo small. Local Compose keeps the richer architecture visible and runnable.
 
 ## Pulseboard API
 
@@ -48,7 +48,7 @@ sequenceDiagram
   participant UI as React UI
   participant API as FastAPI
   participant Parser as PDF / DOCX / TXT parser
-  participant Index as SQLite chunks / Qdrant
+  participant Index as PostgreSQL or SQLite chunks / Qdrant
   participant Provider as OpenRouter free route
   participant Model as Ollama (local profile)
   User->>UI: Upload a document
@@ -76,14 +76,14 @@ The full profile embeds chunks with Ollama, stores vectors in Qdrant, retrieves 
 
 ## Why the hosted demo differs
 
-Render Free instances can sleep and their container filesystem is ephemeral. The free Blueprint therefore runs two web services and no managed databases, persistent volumes, Redis, Celery workers, Qdrant or Ollama. SQLite keeps the demo self-contained. Knowledge Assistant uses lexical retrieval and can optionally generate answers through OpenRouter's free-model route; when model access is unavailable or no key is configured, it can fall back to extractive answers.
+Render Free instances can sleep and their container filesystem is ephemeral. The free Blueprint therefore runs two web services and no managed databases, persistent volumes, Redis, Celery workers, Qdrant or Ollama. The Knowledge Assistant code can use an external PostgreSQL via `DATABASE_URL`; otherwise SQLite keeps the service self-contained. The current Render instance remains on its last successful release because the Supabase credentials have not passed authentication. Knowledge Assistant uses lexical retrieval and can optionally generate answers through OpenRouter's free-model route; when model access is unavailable or no key is configured, it can fall back to extractive answers.
 
-This profile validates account registration, signed HttpOnly sessions, scrypt password hashing, and per-account document, retrieval, and history scoping. Users can delete their own documents; deletion also removes indexed chunks and history entries citing that file. It remains a portfolio demo: there is no email verification or password recovery, uploads are limited to ten documents per account, and the free instance can reset. Do not upload confidential material. In-memory Pulseboard events are not durable. The full Compose profiles demonstrate richer local integrations.
+This profile implements account registration, signed HttpOnly sessions, scrypt password hashing, and per-account document, retrieval, and history scoping. Users can delete their own documents; deletion also removes indexed chunks and history entries citing that file. It remains a portfolio demo: there is no email verification or password recovery, uploads are limited to ten documents per account, and the free instance can reset. Do not upload confidential material. In-memory Pulseboard events are not durable. The full Compose profiles demonstrate richer local integrations.
 
 ## Deliberate next steps before production
 
-- Use managed PostgreSQL and persistent object storage; add tested migration/backup and restore procedures.
-- Add tenant-aware accounts and authorization to Knowledge Assistant; apply per-user quotas and retention/deletion controls.
+- Complete the hosted PostgreSQL connection, then add object storage and tested backup/restore procedures.
+- Add email verification and password recovery to Knowledge Assistant; retain its current per-account authorization and deletion controls.
 - Move uploads and indexing behind a durable job queue; validate file contents, scan files and cap decompressed document size.
 - Use a transactional outbox for task and webhook events; add dead-letter handling and retry policies.
 - Add rate limiting, audit logs, secret rotation, structured tracing and security review.
