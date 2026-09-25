@@ -29,7 +29,7 @@ app=FastAPI(title="Knowledge Assistant",version="1.0.0",lifespan=lifespan)
 @app.get("/health/live")
 def live(): return {"status":"ok"}
 @app.get("/api/v1/mode")
-def mode(): return {"rag_mode":settings.rag_mode}
+def mode(): return {"rag_mode":settings.rag_mode,"max_upload_mb":settings.max_upload_mb}
 @app.get("/health/ready")
 async def ready(db:AsyncSession=Depends(get_db)):
  try:
