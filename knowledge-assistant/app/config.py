@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     embed_model:str="nomic-embed-text"
     upload_dir:str="./data/uploads"
     max_upload_mb:int=20
-    allow_public_uploads:bool=False
+    session_secret:str=""
 settings=Settings()
 
 def normalize_database_url(url: str) -> str:

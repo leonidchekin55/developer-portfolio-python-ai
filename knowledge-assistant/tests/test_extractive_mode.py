@@ -9,7 +9,6 @@ from app.models import Base, Document, DocumentChunk
 
 
 def test_extractive_answers_include_source(monkeypatch, tmp_path):
-    monkeypatch.setattr(rag.settings, "allow_public_uploads", True)
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'rag-test.db'}")
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -17,7 +16,7 @@ def test_extractive_answers_include_source(monkeypatch, tmp_path):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         async with session_factory() as db:
-            document = Document(filename="guide.txt", status="indexed", chunk_count=1)
+            document = Document(filename="demo-guide.txt", status="indexed", chunk_count=1)
             db.add(document)
             await db.flush()
             text = "Бесплатное демо ищет фрагменты документов и показывает ссылки на источники."
@@ -25,13 +24,13 @@ def test_extractive_answers_include_source(monkeypatch, tmp_path):
                                  terms_json=json.dumps(rag._term_weights(text), ensure_ascii=False)))
             await db.commit()
         monkeypatch.setattr(rag, "Session", session_factory)
-        result = await rag._ask_extractive("Как демо показывает источники документов?")
+        result = await rag._ask_extractive("Как демо показывает источники документов?", user_id=1)
         await engine.dispose()
         return result
 
     answer, sources = asyncio.run(prepare_and_ask())
     assert "[Источник 1]" in answer
-    assert sources[0]["filename"] == "guide.txt"
+    assert sources[0]["filename"] == "demo-guide.txt"
     assert sources[0]["page"] == 2
 
 
@@ -49,7 +48,7 @@ def test_openrouter_mode_falls_back_without_secret(monkeypatch):
 
 def test_openrouter_receives_only_retrieved_context(monkeypatch):
     monkeypatch.setattr(rag.settings, "openrouter_api_key", "test-secret")
-    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
+    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question, user_id=None: asyncio.sleep(0, result=[
         {"filename": "guide.txt", "page": 2, "text": "Срок хранения — 30 дней.", "score": 0.7}
     ]))
     captured = {}
@@ -105,7 +104,7 @@ def test_openrouter_rejects_safety_status_as_an_answer():
 
 def test_openrouter_empty_answer_falls_back_to_source(monkeypatch):
     monkeypatch.setattr(rag.settings, "openrouter_api_key", "test-secret")
-    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
+    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question, user_id=None: asyncio.sleep(0, result=[
         {"filename": "guide.txt", "page": 1, "text": "Knowbase принимает PDF, DOCX и TXT.", "score": 0.8}
     ]))
 
@@ -136,7 +135,7 @@ def test_openrouter_empty_answer_falls_back_to_source(monkeypatch):
 
 def test_openrouter_provider_error_falls_back_to_retrieved_source(monkeypatch):
     monkeypatch.setattr(rag.settings, "openrouter_api_key", "test-secret")
-    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
+    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question, user_id=None: asyncio.sleep(0, result=[
         {"filename": "guide.txt", "page": 1, "text": "Knowbase принимает PDF, DOCX и TXT.", "score": 0.8}
     ]))
 

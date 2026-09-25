@@ -44,5 +44,5 @@ services:
         value: /tmp/knowledge-uploads
       - key: MAX_UPLOAD_MB
         value: "10"
-      - key: ALLOW_PUBLIC_UPLOADS
-        value: "false"
+      - key: SESSION_SECRET
+        generateValue: true

@@ -9,7 +9,7 @@ import httpx
 from docx import Document as DocxDocument
 from pypdf import PdfReader
 from qdrant_client import QdrantClient, models
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, or_, select
 
 from app.config import settings, ollama_url, qdrant_url
 from app.db import Session
@@ -91,7 +91,7 @@ async def embed(text: str):
         return response.json()["embedding"]
 
 
-async def index_document(doc_id: int, filename: str, path: Path):
+async def index_document(doc_id: int, filename: str, path: Path, user_id: int | None = None):
     if settings.rag_mode in {"extractive", "groq", "openrouter"}:
         entries = []
         for page, text in extract(path):
@@ -108,7 +108,7 @@ async def index_document(doc_id: int, filename: str, path: Path):
         for idx, chunk in enumerate(chunks_for(text)):
             vector = await embed(chunk)
             points.append(models.PointStruct(id=str(uuid.uuid4()), vector=vector,
-                payload={"document_id": doc_id, "filename": filename, "page": page, "chunk_index": idx, "text": chunk}))
+                payload={"document_id": doc_id, "user_id": user_id, "filename": filename, "page": page, "chunk_index": idx, "text": chunk}))
     if points:
         if not client.collection_exists(COLLECTION):
             client.create_collection(COLLECTION, vectors_config=models.VectorParams(size=len(points[0].vector), distance=models.Distance.COSINE))
@@ -129,15 +129,21 @@ def _similarity(left: dict, right: dict):
     return dot / (left_norm * right_norm) if left_norm and right_norm else 0.0
 
 
-async def _retrieve_extractive(question: str):
+async def _retrieve_extractive(question: str, user_id: int | None = None):
     terms = _term_weights(question)
     if not terms:
         return []
     async with Session() as db:
         query = select(DocumentChunk).order_by(DocumentChunk.document_id, DocumentChunk.page,
                                                DocumentChunk.chunk_index)
-        if not settings.allow_public_uploads:
-            query = query.join(Document).where(Document.filename == "demo-guide.txt", Document.status == "indexed")
+        query = query.join(Document).where(Document.status == "indexed")
+        if user_id is None:
+            query = query.where(Document.user_id.is_(None), Document.filename == "demo-guide.txt")
+        else:
+            query = query.where(or_(
+                Document.user_id == user_id,
+                and_(Document.user_id.is_(None), Document.filename == "demo-guide.txt"),
+            ))
         rows = await db.execute(query.limit(2000))
         chunks = list(rows.scalars())
         filenames = {}
@@ -152,10 +158,10 @@ async def _retrieve_extractive(question: str):
             for score, chunk in hits if score > 0]
 
 
-async def _ask_extractive(question: str):
+async def _ask_extractive(question: str, user_id: int | None = None):
     if not _term_weights(question):
         return "Сформулируйте вопрос словами из документов, чтобы найти подходящий фрагмент.", []
-    sources = await _retrieve_extractive(question)
+    sources = await _retrieve_extractive(question, user_id=user_id)
     if not sources:
         return "В загруженных документах не найден подходящий фрагмент. Попробуйте переформулировать вопрос.", []
     return _extractive_answer_from_sources(sources), sources
@@ -167,8 +173,8 @@ def _extractive_answer_from_sources(sources: list[dict]) -> str:
     return f"В документе найден подходящий фрагмент:\n\n«{sources[0]['text']}»\n\n[Источник 1]"
 
 
-async def _ask_openrouter(question: str):
-    sources = await _retrieve_extractive(question)
+async def _ask_openrouter(question: str, user_id: int | None = None):
+    sources = await _retrieve_extractive(question, user_id=user_id)
     if not sources:
         return "В загруженных документах не найден подходящий контекст.", []
     context = "\n\n".join(
@@ -210,16 +216,19 @@ async def _ask_openrouter(question: str):
     return answer, [{k: source[k] for k in ("filename", "page", "text", "score")} for source in sources]
 
 
-async def ask(question: str):
+async def ask(question: str, user_id: int | None = None):
+    if user_id is None:
+        return await _ask_extractive(question)
     mode = effective_rag_mode()
     if mode == "extractive":
-        return await _ask_extractive(question)
+        return await _ask_extractive(question, user_id=user_id)
     if mode == "openrouter":
-        return await _ask_openrouter(question)
+        return await _ask_openrouter(question, user_id=user_id)
     if not client.collection_exists(COLLECTION):
         return "В базе пока нет документов. Загрузите файл, чтобы начать.", []
     vector = await embed(question)
-    hits = client.query_points(COLLECTION, query=vector, limit=5, with_payload=True).points
+    user_filter = models.Filter(must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))])
+    hits = client.query_points(COLLECTION, query=vector, query_filter=user_filter, limit=5, with_payload=True).points
     if not hits:
         return "В загруженных документах не найден подходящий контекст.", []
     context = "\n\n".join(f"[Источник {i + 1}: {hit.payload['filename']}, стр. {hit.payload['page']}] {hit.payload['text']}"
