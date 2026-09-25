@@ -16,10 +16,12 @@ from app.db import Session
 from app.models import Document, DocumentChunk
 
 COLLECTION = "knowledge_chunks"
-client = QdrantClient(url=qdrant_url()) if settings.rag_mode not in {"extractive", "openrouter"} else None
+client = QdrantClient(url=qdrant_url()) if settings.rag_mode not in {"extractive", "groq", "openrouter"} else None
 
 
 def effective_rag_mode() -> str:
+    if settings.rag_mode == "groq":
+        return "openrouter" if settings.openrouter_api_key.strip() else "extractive"
     if settings.rag_mode == "openrouter":
         return "openrouter" if settings.openrouter_api_key.strip() else "extractive"
     if settings.rag_mode == "extractive" and settings.openrouter_api_key.strip():
@@ -61,7 +63,7 @@ async def embed(text: str):
 
 
 async def index_document(doc_id: int, filename: str, path: Path):
-    if settings.rag_mode in {"extractive", "openrouter"}:
+    if settings.rag_mode in {"extractive", "groq", "openrouter"}:
         entries = []
         for page, text in extract(path):
             for idx, chunk in enumerate(chunks_for(text)):
