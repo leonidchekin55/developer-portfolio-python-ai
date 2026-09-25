@@ -79,3 +79,50 @@ def test_openrouter_receives_only_retrieved_context(monkeypatch):
     assert "полный документ" not in captured["payload"]["messages"][1]["content"]
     assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer test-secret"
+    assert captured["payload"]["reasoning"] == {"effort": "none", "exclude": True}
+
+
+def test_openrouter_answer_strips_reasoning_and_uses_final_answer():
+    message = {
+        "content": "Let me think through this carefully.\n\nFinal Answer: PDF, DOCX и TXT. [Источник 1]",
+        "reasoning": "private chain of thought",
+    }
+    assert rag._openrouter_answer(message) == "PDF, DOCX и TXT. [Источник 1]"
+
+
+def test_openrouter_answer_supports_structured_content_and_think_tags():
+    message = {"content": [
+        {"type": "text", "text": "<think>private chain</think>PDF, DOCX и TXT. [Источник 1]"}
+    ]}
+    assert rag._openrouter_answer(message) == "PDF, DOCX и TXT. [Источник 1]"
+
+
+def test_openrouter_empty_answer_falls_back_to_source(monkeypatch):
+    monkeypatch.setattr(rag.settings, "openrouter_api_key", "test-secret")
+    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
+        {"filename": "guide.txt", "page": 1, "text": "Knowbase принимает PDF, DOCX и TXT.", "score": 0.8}
+    ]))
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": "", "reasoning": "private chain"}}]}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(rag.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    answer, sources = asyncio.run(rag._ask_openrouter("Какие форматы принимает Knowbase?"))
+    assert "private chain" not in answer
+    assert "PDF, DOCX и TXT" in answer
+    assert "[Источник 1]" in answer
+    assert sources[0]["filename"] == "guide.txt"
