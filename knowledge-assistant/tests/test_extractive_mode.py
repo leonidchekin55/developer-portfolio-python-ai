@@ -132,3 +132,26 @@ def test_openrouter_empty_answer_falls_back_to_source(monkeypatch):
     assert "PDF, DOCX и TXT" in answer
     assert "[Источник 1]" in answer
     assert sources[0]["filename"] == "guide.txt"
+
+
+def test_openrouter_provider_error_falls_back_to_retrieved_source(monkeypatch):
+    monkeypatch.setattr(rag.settings, "openrouter_api_key", "test-secret")
+    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
+        {"filename": "guide.txt", "page": 1, "text": "Knowbase принимает PDF, DOCX и TXT.", "score": 0.8}
+    ]))
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, *args, **kwargs):
+            raise rag.httpx.ConnectError("provider unavailable")
+
+    monkeypatch.setattr(rag.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    answer, sources = asyncio.run(rag._ask_openrouter("Какие форматы принимает Knowbase?"))
+    assert "PDF, DOCX и TXT" in answer
+    assert "[Источник 1]" in answer
+    assert sources[0]["filename"] == "guide.txt"

@@ -158,7 +158,13 @@ async def _ask_extractive(question: str):
     sources = await _retrieve_extractive(question)
     if not sources:
         return "В загруженных документах не найден подходящий фрагмент. Попробуйте переформулировать вопрос.", []
-    return f"В документе найден подходящий фрагмент:\n\n«{sources[0]['text']}»\n\n[Источник 1]", sources
+    return _extractive_answer_from_sources(sources), sources
+
+
+def _extractive_answer_from_sources(sources: list[dict]) -> str:
+    if not sources:
+        return "В загруженных документах не найден подходящий фрагмент. Попробуйте переформулировать вопрос."
+    return f"В документе найден подходящий фрагмент:\n\n«{sources[0]['text']}»\n\n[Источник 1]"
 
 
 async def _ask_openrouter(question: str):
@@ -179,23 +185,28 @@ async def _ask_openrouter(question: str):
             {"role": "user", "content": f"Выдержки из документов:\n{context}\n\nВопрос: {question[:2000]}"},
         ],
     }
-    async with httpx.AsyncClient(timeout=45) as http:
-        response = await http.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key.strip()}",
-                "HTTP-Referer": "https://portfolio-knowledge-demo.onrender.com",
-                "X-Title": "Knowbase Portfolio Demo",
-            },
-            json=payload,
-        )
-        response.raise_for_status()
-    message = response.json()["choices"][0]["message"]
-    answer = _openrouter_answer(message)
+    try:
+        async with httpx.AsyncClient(timeout=45) as http:
+            response = await http.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openrouter_api_key.strip()}",
+                    "HTTP-Referer": "https://portfolio-knowledge-demo.onrender.com",
+                    "X-Title": "Knowbase Portfolio Demo",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+        message = response.json()["choices"][0]["message"]
+        answer = _openrouter_answer(message)
+    except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
+        return _extractive_answer_from_sources(sources), [
+            {k: source[k] for k in ("filename", "page", "text", "score")} for source in sources
+        ]
     if not _is_usable_openrouter_answer(answer):
         # Keep the demo useful if a free model returns reasoning-only output
         # or an unsupported response shape.
-        answer = f"В документе найден подходящий фрагмент:\n\n«{sources[0]['text']}»\n\n[Источник 1]"
+        answer = _extractive_answer_from_sources(sources)
     return answer, [{k: source[k] for k in ("filename", "page", "text", "score")} for source in sources]
 
 
