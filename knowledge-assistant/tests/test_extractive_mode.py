@@ -9,6 +9,7 @@ from app.models import Base, Document, DocumentChunk
 
 
 def test_extractive_answers_include_source(monkeypatch, tmp_path):
+    monkeypatch.setattr(rag.settings, "allow_public_uploads", True)
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'rag-test.db'}")
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 

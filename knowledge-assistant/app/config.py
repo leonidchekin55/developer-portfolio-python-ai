@@ -1,19 +1,20 @@
 from pydantic_settings import BaseSettings,SettingsConfigDict
 class Settings(BaseSettings):
- model_config=SettingsConfigDict(env_file=".env",extra="ignore")
- database_url:str="sqlite+aiosqlite:///./knowledge.db"
- qdrant_url:str="http://localhost:6333"
- qdrant_hostport:str=""
- redis_url:str="redis://localhost:6379/0"
- rag_mode:str="ollama"
- openrouter_api_key:str=""
- openrouter_model:str="openrouter/free"
- ollama_url:str="http://localhost:11434"
- ollama_hostport:str=""
- llm_model:str="llama3.2:1b"
- embed_model:str="nomic-embed-text"
- upload_dir:str="./data/uploads"
- max_upload_mb:int=20
+    model_config=SettingsConfigDict(env_file=".env",extra="ignore")
+    database_url:str="sqlite+aiosqlite:///./knowledge.db"
+    qdrant_url:str="http://localhost:6333"
+    qdrant_hostport:str=""
+    redis_url:str="redis://localhost:6379/0"
+    rag_mode:str="ollama"
+    openrouter_api_key:str=""
+    openrouter_model:str="openrouter/free"
+    ollama_url:str="http://localhost:11434"
+    ollama_hostport:str=""
+    llm_model:str="llama3.2:1b"
+    embed_model:str="nomic-embed-text"
+    upload_dir:str="./data/uploads"
+    max_upload_mb:int=20
+    allow_public_uploads:bool=False
 settings=Settings()
 
 def normalize_database_url(url: str) -> str:

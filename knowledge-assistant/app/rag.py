@@ -134,8 +134,11 @@ async def _retrieve_extractive(question: str):
     if not terms:
         return []
     async with Session() as db:
-        rows = await db.execute(select(DocumentChunk).order_by(DocumentChunk.document_id, DocumentChunk.page,
-                               DocumentChunk.chunk_index).limit(2000))
+        query = select(DocumentChunk).order_by(DocumentChunk.document_id, DocumentChunk.page,
+                                               DocumentChunk.chunk_index)
+        if not settings.allow_public_uploads:
+            query = query.join(Document).where(Document.filename == "demo-guide.txt", Document.status == "indexed")
+        rows = await db.execute(query.limit(2000))
         chunks = list(rows.scalars())
         filenames = {}
         for chunk in chunks:
