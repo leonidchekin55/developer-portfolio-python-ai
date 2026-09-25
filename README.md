@@ -9,7 +9,7 @@ Two runnable portfolio projects covering multi-tenant API design and document-gr
 | **Pulseboard API** — SaaS projects and tasks | [Open API](https://portfolio-pulseboard-demo.onrender.com) | [Swagger UI](https://portfolio-pulseboard-demo.onrender.com/docs) |
 | **Knowledge Assistant** — document search with cited sources | [Open app](https://portfolio-knowledge-demo.onrender.com) | [Swagger UI](https://portfolio-knowledge-demo.onrender.com/docs) |
 
-The hosted instances run on Render Free, may sleep when idle, and can reset ephemeral data. Knowledge Assistant's code supports PostgreSQL through `DATABASE_URL`, but the current Render service is still on its last successful release: the Supabase connection has not yet passed authentication. Until that deployment succeeds, do not rely on account or history persistence. The hosted assistant uses lexical retrieval and an optional OpenRouter free-model route; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
+The hosted instances run on Render Free, may sleep when idle, and can reset ephemeral data. Knowledge Assistant supports PostgreSQL through `DATABASE_URL`, but persistence in the hosted instance is not yet verified. Do not rely on account or history persistence until the PostgreSQL connection is confirmed. The hosted assistant uses lexical retrieval and an optional OpenRouter free-model route; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
 
 ## Product previews
 
