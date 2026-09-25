@@ -34,17 +34,17 @@ def test_extractive_answers_include_source(monkeypatch, tmp_path):
     assert sources[0]["page"] == 2
 
 
-def test_groq_mode_falls_back_without_secret(monkeypatch):
-    monkeypatch.setattr(rag.settings, "rag_mode", "groq")
-    monkeypatch.setattr(rag.settings, "groq_api_key", "")
+def test_openrouter_mode_falls_back_without_secret(monkeypatch):
+    monkeypatch.setattr(rag.settings, "rag_mode", "openrouter")
+    monkeypatch.setattr(rag.settings, "openrouter_api_key", "")
     assert rag.effective_rag_mode() == "extractive"
     monkeypatch.setattr(rag.settings, "rag_mode", "extractive")
-    monkeypatch.setattr(rag.settings, "groq_api_key", "configured")
-    assert rag.effective_rag_mode() == "groq"
+    monkeypatch.setattr(rag.settings, "openrouter_api_key", "configured")
+    assert rag.effective_rag_mode() == "openrouter"
 
 
-def test_groq_receives_only_retrieved_context(monkeypatch):
-    monkeypatch.setattr(rag.settings, "groq_api_key", "test-secret")
+def test_openrouter_receives_only_retrieved_context(monkeypatch):
+    monkeypatch.setattr(rag.settings, "openrouter_api_key", "test-secret")
     monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
         {"filename": "guide.txt", "page": 2, "text": "Срок хранения — 30 дней.", "score": 0.7}
     ]))
@@ -69,9 +69,10 @@ def test_groq_receives_only_retrieved_context(monkeypatch):
             return FakeResponse()
 
     monkeypatch.setattr(rag.httpx, "AsyncClient", lambda **kwargs: FakeClient())
-    answer, sources = asyncio.run(rag._ask_groq("Какой срок хранения?"))
+    answer, sources = asyncio.run(rag._ask_openrouter("Какой срок хранения?"))
     assert "[Источник 1]" in answer
     assert sources[0]["filename"] == "guide.txt"
     assert "Срок хранения — 30 дней." in captured["payload"]["messages"][1]["content"]
     assert "полный документ" not in captured["payload"]["messages"][1]["content"]
+    assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer test-secret"

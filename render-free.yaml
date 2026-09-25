@@ -37,8 +37,8 @@ services:
       - key: REDIS_URL
         value: ""
       - key: RAG_MODE
-        value: groq
-      - key: GROQ_API_KEY
+        value: openrouter
+      - key: OPENROUTER_API_KEY
         sync: false
       - key: UPLOAD_DIR
         value: /tmp/knowledge-uploads

@@ -17,7 +17,7 @@ from app.rag import index_document,ask,_term_weights,effective_rag_mode
 async def lifespan(app):
  async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
  Path(settings.upload_dir).mkdir(parents=True,exist_ok=True)
- if effective_rag_mode()=="extractive":
+ if settings.rag_mode in {"extractive","openrouter"}:
   async with Session() as db:
    if not (await db.execute(select(Document).limit(1))).scalar_one_or_none():
     filename="demo-guide.txt"

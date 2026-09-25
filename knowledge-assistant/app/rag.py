@@ -16,14 +16,14 @@ from app.db import Session
 from app.models import Document, DocumentChunk
 
 COLLECTION = "knowledge_chunks"
-client = QdrantClient(url=qdrant_url()) if settings.rag_mode not in {"extractive", "groq"} else None
+client = QdrantClient(url=qdrant_url()) if settings.rag_mode not in {"extractive", "openrouter"} else None
 
 
 def effective_rag_mode() -> str:
-    if settings.rag_mode == "groq":
-        return "groq" if settings.groq_api_key.strip() else "extractive"
-    if settings.rag_mode == "extractive" and settings.groq_api_key.strip():
-        return "groq"
+    if settings.rag_mode == "openrouter":
+        return "openrouter" if settings.openrouter_api_key.strip() else "extractive"
+    if settings.rag_mode == "extractive" and settings.openrouter_api_key.strip():
+        return "openrouter"
     return settings.rag_mode
 
 
@@ -61,7 +61,7 @@ async def embed(text: str):
 
 
 async def index_document(doc_id: int, filename: str, path: Path):
-    if settings.rag_mode in {"extractive", "groq"}:
+    if settings.rag_mode in {"extractive", "openrouter"}:
         entries = []
         for page, text in extract(path):
             for idx, chunk in enumerate(chunks_for(text)):
@@ -127,7 +127,7 @@ async def _ask_extractive(question: str):
     return f"В документе найден подходящий фрагмент:\n\n«{sources[0]['text']}»\n\n[Источник 1]", sources
 
 
-async def _ask_groq(question: str):
+async def _ask_openrouter(question: str):
     sources = await _retrieve_extractive(question)
     if not sources:
         return "В загруженных документах не найден подходящий контекст.", []
@@ -136,7 +136,7 @@ async def _ask_groq(question: str):
         for i, source in enumerate(sources)
     )[:6000]
     payload = {
-        "model": settings.groq_model,
+        "model": settings.openrouter_model,
         "temperature": 0.2,
         "max_tokens": 700,
         "messages": [
@@ -145,8 +145,15 @@ async def _ask_groq(question: str):
         ],
     }
     async with httpx.AsyncClient(timeout=45) as http:
-        response = await http.post("https://api.groq.com/openai/v1/chat/completions",
-                                   headers={"Authorization": f"Bearer {settings.groq_api_key.strip()}"}, json=payload)
+        response = await http.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.openrouter_api_key.strip()}",
+                "HTTP-Referer": "https://portfolio-knowledge-demo.onrender.com",
+                "X-Title": "Knowbase Portfolio Demo",
+            },
+            json=payload,
+        )
         response.raise_for_status()
     answer = response.json()["choices"][0]["message"]["content"]
     return answer, [{k: source[k] for k in ("filename", "page", "text", "score")} for source in sources]
@@ -156,8 +163,8 @@ async def ask(question: str):
     mode = effective_rag_mode()
     if mode == "extractive":
         return await _ask_extractive(question)
-    if mode == "groq":
-        return await _ask_groq(question)
+    if mode == "openrouter":
+        return await _ask_openrouter(question)
     if not client.collection_exists(COLLECTION):
         return "В базе пока нет документов. Загрузите файл, чтобы начать.", []
     vector = await embed(question)
