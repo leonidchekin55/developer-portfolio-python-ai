@@ -9,7 +9,7 @@ Two runnable portfolio projects covering multi-tenant API design and document-gr
 | **Pulseboard API** — SaaS projects and tasks | [Open API](https://portfolio-pulseboard-demo.onrender.com) | [Swagger UI](https://portfolio-pulseboard-demo.onrender.com/docs) |
 | **Knowledge Assistant** — document search with cited sources | [Open app](https://portfolio-knowledge-demo.onrender.com) | [Swagger UI](https://portfolio-knowledge-demo.onrender.com/docs) |
 
-The hosted instances run on Render Free. They may sleep when idle and their SQLite data can reset. The cloud Knowledge Assistant uses extractive retrieval; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
+The hosted instances run on Render Free. They may sleep when idle and their SQLite data can reset. The hosted Knowledge Assistant uses lexical retrieval and an optional OpenRouter free-model route; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
 
 ## Product previews
 
@@ -38,7 +38,7 @@ The hosted instances run on Render Free. They may sleep when idle and their SQLi
 
 - PDF, DOCX and TXT extraction with page-aware chunking
 - Qdrant vectors and Ollama embeddings/generation in the local profile
-- Extractive, no-API retrieval for the hosted free demo
+- Lexical retrieval with optional OpenRouter free-model generation in the hosted demo
 - Answers with source excerpts, page numbers and conversation history
 - FastAPI, async SQLAlchemy, React UI, Docker Compose and automated tests
 
@@ -83,7 +83,7 @@ docker compose up --build
 
 Knowledge Assistant: <http://localhost:8001> · API docs: <http://localhost:8001/docs>
 
-The first local run downloads the configured Ollama models. The free cloud profile does not require an AI API key.
+The first local run downloads the configured Ollama models. The hosted Knowledge Assistant uses the server-side OpenRouter key for free-model generation; without it, the app falls back to extractive answers.
 
 ## Engineering workflow
 

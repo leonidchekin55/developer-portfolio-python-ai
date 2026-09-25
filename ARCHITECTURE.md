@@ -49,6 +49,7 @@ sequenceDiagram
   participant API as FastAPI
   participant Parser as PDF / DOCX / TXT parser
   participant Index as SQLite chunks / Qdrant
+  participant Provider as OpenRouter free route
   participant Model as Ollama (local profile)
   User->>UI: Upload a document
   UI->>API: Multipart file
@@ -57,23 +58,27 @@ sequenceDiagram
   Parser->>Index: Store chunk and retrieval metadata
   User->>UI: Ask a question
   UI->>API: POST /api/v1/chat
-  API->>Index: Find relevant chunks
+  API->>Index: Find and rank relevant chunks
+  Index-->>API: Text, file, page and relevance
+  opt Hosted demo with API key
+    API->>Provider: Question + retrieved excerpts
+    Provider-->>API: Grounded answer with citations
+  end
   opt Full local profile
     API->>Model: Embed query and generate grounded answer
   end
-  Index-->>API: Text, file, page and relevance
   API-->>UI: Answer, citations and history
 ```
 
-The full profile embeds chunks with Ollama, stores vectors in Qdrant, retrieves the nearest passages and asks the local model to answer only from those passages. The extractive profile tokenizes question and chunk text, ranks them with cosine similarity and returns the best passage as the answer. Both paths keep a filename/page/text citation with each returned source.
+The hosted profile tokenizes the question and chunk text, ranks up to three passages with cosine similarity, and sends the question plus relevant excerpts to the `openrouter/free` model route. The API key stays in the server environment; the original uploaded file is not sent to the model provider. Context is capped at about 6,000 characters, and the prompt asks the model to answer only from the excerpts, cite sources, and ignore instructions found inside document content. If no key is configured, the API returns an extractive answer instead. OpenRouter availability and free-model quotas can change.
 
-The API accepts PDF, DOCX and TXT, rejects other extensions and enforces a byte-size limit. Uploaded files are removed after indexing. The hosted demo stores extracted chunks and chat history in SQLite and seeds a small public guide so the first query works immediately.
+The full profile embeds chunks with Ollama, stores vectors in Qdrant, retrieves nearby passages and asks the local model to answer only from those passages. Both hosted and local paths return filename/page/text metadata for cited sources. The API accepts PDF, DOCX and TXT, rejects other extensions and enforces a byte-size limit. Uploaded files are removed after indexing. The hosted demo stores extracted chunks and chat history in SQLite and seeds a small public guide so the first query works immediately.
 
 ## Why the hosted demo differs
 
-Render Free instances can sleep and their container filesystem is ephemeral. The free Blueprint therefore runs two web services and no managed databases, persistent volumes, Redis, Celery workers, Qdrant or Ollama. SQLite keeps the demo self-contained, and the Knowledge Assistant uses extractive retrieval to avoid paid API keys and model downloads.
+Render Free instances can sleep and their container filesystem is ephemeral. The free Blueprint therefore runs two web services and no managed databases, persistent volumes, Redis, Celery workers, Qdrant or Ollama. SQLite keeps the demo self-contained. Knowledge Assistant uses lexical retrieval and can optionally generate answers through OpenRouter's free-model route; when model access is unavailable or no key is configured, it can fall back to extractive answers.
 
-This profile validates the request flow and UI, but it is not a durable multi-user SaaS deployment. Data can reset and in-memory Pulseboard events are not durable. The full Compose profiles demonstrate the richer local integrations.
+This profile validates the request flow and UI, but it is not a durable multi-user SaaS deployment. Knowledge Assistant has no user accounts or per-visitor document isolation, so its documents and chat history are shared in the demo. Data can reset and in-memory Pulseboard events are not durable. The full Compose profiles demonstrate the richer local integrations.
 
 ## Deliberate next steps before production
 
