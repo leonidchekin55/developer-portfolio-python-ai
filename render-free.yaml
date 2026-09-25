@@ -37,7 +37,9 @@ services:
       - key: REDIS_URL
         value: ""
       - key: RAG_MODE
-        value: extractive
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
       - key: UPLOAD_DIR
         value: /tmp/knowledge-uploads
       - key: MAX_UPLOAD_MB

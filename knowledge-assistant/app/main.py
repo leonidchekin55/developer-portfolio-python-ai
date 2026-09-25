@@ -2,6 +2,7 @@ import json,os
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI,UploadFile,File,HTTPException,Depends
+import httpx
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel,Field
@@ -11,12 +12,12 @@ from redis.asyncio import Redis
 from app.config import settings
 from app.models import Base,Document,ChatMessage,DocumentChunk
 from app.db import engine,Session,get_db
-from app.rag import index_document,ask,_term_weights
+from app.rag import index_document,ask,_term_weights,effective_rag_mode
 @asynccontextmanager
 async def lifespan(app):
  async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
  Path(settings.upload_dir).mkdir(parents=True,exist_ok=True)
- if settings.rag_mode=="extractive":
+ if effective_rag_mode()=="extractive":
   async with Session() as db:
    if not (await db.execute(select(Document).limit(1))).scalar_one_or_none():
     filename="demo-guide.txt"
@@ -29,7 +30,7 @@ app=FastAPI(title="Knowledge Assistant",version="1.0.0",lifespan=lifespan)
 @app.get("/health/live")
 def live(): return {"status":"ok"}
 @app.get("/api/v1/mode")
-def mode(): return {"rag_mode":settings.rag_mode,"max_upload_mb":settings.max_upload_mb}
+def mode(): return {"rag_mode":effective_rag_mode(),"max_upload_mb":settings.max_upload_mb}
 @app.get("/health/ready")
 async def ready(db:AsyncSession=Depends(get_db)):
  try:
@@ -60,6 +61,9 @@ class Question(BaseModel): question:str=Field(min_length=3,max_length=2000)
 @app.post("/api/v1/chat")
 async def chat(data:Question,db:AsyncSession=Depends(get_db)):
  try: answer,sources=await ask(data.question)
+ except httpx.HTTPStatusError as e:
+  if e.response.status_code==429: raise HTTPException(503,"Лимит AI-запросов временно исчерпан. Попробуйте позже.") from e
+  raise HTTPException(502,"Внешний AI-сервис временно недоступен.") from e
  except Exception as e: raise HTTPException(502,f"RAG request failed: {type(e).__name__}") from e
  db.add(ChatMessage(question=data.question,answer=answer,sources_json=json.dumps(sources,ensure_ascii=False))); await db.commit(); return {"answer":answer,"sources":sources}
 @app.get("/api/v1/history")

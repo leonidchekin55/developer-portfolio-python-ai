@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -31,3 +32,46 @@ def test_extractive_answers_include_source(monkeypatch, tmp_path):
     assert "[Источник 1]" in answer
     assert sources[0]["filename"] == "guide.txt"
     assert sources[0]["page"] == 2
+
+
+def test_groq_mode_falls_back_without_secret(monkeypatch):
+    monkeypatch.setattr(rag.settings, "rag_mode", "groq")
+    monkeypatch.setattr(rag.settings, "groq_api_key", "")
+    assert rag.effective_rag_mode() == "extractive"
+    monkeypatch.setattr(rag.settings, "rag_mode", "extractive")
+    monkeypatch.setattr(rag.settings, "groq_api_key", "configured")
+    assert rag.effective_rag_mode() == "groq"
+
+
+def test_groq_receives_only_retrieved_context(monkeypatch):
+    monkeypatch.setattr(rag.settings, "groq_api_key", "test-secret")
+    monkeypatch.setattr(rag, "_retrieve_extractive", lambda question: asyncio.sleep(0, result=[
+        {"filename": "guide.txt", "page": 2, "text": "Срок хранения — 30 дней.", "score": 0.7}
+    ]))
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Срок хранения — 30 дней. [Источник 1]"}}]}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, headers, json):
+            captured.update(url=url, headers=headers, payload=json)
+            return FakeResponse()
+
+    monkeypatch.setattr(rag.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    answer, sources = asyncio.run(rag._ask_groq("Какой срок хранения?"))
+    assert "[Источник 1]" in answer
+    assert sources[0]["filename"] == "guide.txt"
+    assert "Срок хранения — 30 дней." in captured["payload"]["messages"][1]["content"]
+    assert "полный документ" not in captured["payload"]["messages"][1]["content"]
+    assert captured["headers"]["Authorization"] == "Bearer test-secret"

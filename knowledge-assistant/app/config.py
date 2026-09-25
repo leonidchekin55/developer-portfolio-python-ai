@@ -6,6 +6,8 @@ class Settings(BaseSettings):
  qdrant_hostport:str=""
  redis_url:str="redis://localhost:6379/0"
  rag_mode:str="ollama"
+ groq_api_key:str=""
+ groq_model:str="openai/gpt-oss-20b"
  ollama_url:str="http://localhost:11434"
  ollama_hostport:str=""
  llm_model:str="llama3.2:1b"
