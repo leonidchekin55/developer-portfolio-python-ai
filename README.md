@@ -1,6 +1,6 @@
 # Python Backend & Applied AI Portfolio
 
-Two runnable portfolio projects covering multi-tenant API design and document-grounded AI. Both have a free hosted demo and a fuller local Docker Compose profile.
+Three runnable portfolio projects covering multi-tenant APIs, document-grounded AI, and six applied AI demos. Each has a free hosted demo and a local development profile.
 
 ## Live demos
 
@@ -8,9 +8,9 @@ Two runnable portfolio projects covering multi-tenant API design and document-gr
 |---|---|---|
 | **Pulseboard API** — SaaS projects and tasks | [Open API](https://portfolio-pulseboard-demo.onrender.com) | [Swagger UI](https://portfolio-pulseboard-demo.onrender.com/docs) |
 | **Knowledge Assistant** — document search with cited sources | [Open app](https://portfolio-knowledge-demo.onrender.com) | [Swagger UI](https://portfolio-knowledge-demo.onrender.com/docs) |
-| **AI Engineer Portfolio** — six applied AI demos | [Narrated tour](https://leonid-portfolio.onrender.com/ai-engineer-tour.html) · [Interactive sandbox](https://leonid-ai-engineer-portfolio.onrender.com/sandbox) | [Source + docs](https://github.com/leonidchekin55/developer-portfolio-python-ai/tree/codex/ai-engineer-render-free) |
+| **AI Engineer Portfolio** — six applied AI demos | [Narrated tour](https://leonid-portfolio.onrender.com/ai-engineer-tour.html) · [Interactive sandbox](https://leonid-ai-engineer-portfolio.onrender.com/sandbox) | [Source + docs](https://github.com/leonidchekin55/developer-portfolio-python-ai/tree/main) |
 
-The hosted instances run on Render Free, may sleep when idle, and can reset ephemeral data. Knowledge Assistant supports PostgreSQL through `DATABASE_URL`, but persistence in the hosted instance is not yet verified. Do not rely on account or history persistence until the PostgreSQL connection is confirmed. The hosted assistant uses lexical retrieval and an optional OpenRouter free-model route; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
+The hosted instances run on Render Free and may sleep when idle. The Knowledge Assistant Blueprint uses SQLite in `/tmp` and extractive retrieval, so the demo does not require a paid database or an LLM key. Its accounts, uploads, and history are temporary and can reset on restart or deploy. For persistent use, configure and verify a PostgreSQL connection separately. The local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
 
 ## Product previews
 
