@@ -19,13 +19,15 @@ API через прокси: `http://localhost:8080`. Локально без к
 
 ## Render: бесплатная демо-конфигурация
 
-В корне лежит `render.yaml` для одного Render Web Service с планом `free`. Он запускает все шесть демо под разными путями, использует mock LLM и локальную SQLite в `/tmp`; платные API, базы, Redis, workers и persistent disks не создаются. Blueprint генерирует уникальные admin/reader токены через Render secrets.
+В корне лежит `render.yaml` для одного Render Web Service с планом `free`. Он запускает все шесть демо под разными путями, использует mock LLM и локальную SQLite в `/tmp`; платные API, базы, Redis, workers и persistent disks не создаются. В деплое используются случайные admin/reader токены: они хранятся в Render как секреты, а Blueprint задаёт `generateValue`.
 
 Бесплатный сервис Render засыпает при простое, а его файловая система временная: записи, загруженные документы и SQLite могут сброситься при перезапуске или новом деплое. Не загружайте реальные персональные или конфиденциальные данные. В Render Dashboard проверьте, что сервис остаётся на плане **Free**; не выбирайте upgrade. См. [ограничения бесплатного тарифа Render](https://render.com/docs/free).
 
-После публикации добавьте выданный Render URL в основное портфолио `leonid-portfolio` в `content/portfolio.json`. Не указывайте URL до успешного деплоя и smoke-проверки `/`, `/05-production/ready` и `/01-lead-manager/docs`.
+Публичная ссылка добавлена в основное портфолио `leonid-portfolio`. Перед повторным деплоем проверяйте `/`, `/05-production/ready` и `/01-lead-manager/docs`.
 
-Для защищённых операций из Swagger нужен `API_TOKEN`, который Render генерирует как секрет. Не публикуйте его и не помещайте в HTML сайта. Для публичного просмотра достаточно открывать `/docs` и `/demo`; внешние записи доступны только с bearer-токеном.
+Опубликованное демо: [витрина шести проектов](https://leonid-ai-engineer-portfolio.onrender.com/), [Lead Manager API](https://leonid-ai-engineer-portfolio.onrender.com/01-lead-manager/docs), [Document Processor UI](https://leonid-ai-engineer-portfolio.onrender.com/03-document-processor/demo).
+
+Для защищённых операций из Swagger нужен `API_TOKEN` из локального игнорируемого файла `.render-demo.env`; соответствующее значение хранится как секрет Render. Не публикуйте токен и не помещайте его в HTML сайта. Публичная витрина и Swagger доступны без авторизации; операции записи защищены bearer-токеном.
 
 ## Приложения
 
