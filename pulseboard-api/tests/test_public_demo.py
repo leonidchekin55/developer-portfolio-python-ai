@@ -34,12 +34,13 @@ def test_public_demo_token_cannot_access_regular_api():
         assert response.status_code == 401
 
 
-def test_public_demo_rate_limit_ignores_spoofed_forwarded_for(monkeypatch):
+def test_public_demo_rate_limit_uses_render_proxy_client_ip(monkeypatch):
     from app import main
     with TestClient(app) as client:
         monkeypatch.setattr(main, "_demo_ip_windows", {})
         for index in range(12):
-            response = client.post("/api/v1/demo/session", headers={"X-Forwarded-For": f"198.51.100.{index}"})
+            # Render prepends the true IP; a caller-controlled suffix cannot evade the limit.
+            response = client.post("/api/v1/demo/session", headers={"X-Forwarded-For": f"203.0.113.7, 198.51.100.{index}"})
             assert response.status_code == 200
-        blocked = client.post("/api/v1/demo/session", headers={"X-Forwarded-For": "203.0.113.99"})
+        blocked = client.post("/api/v1/demo/session", headers={"X-Forwarded-For": "203.0.113.7, 203.0.113.99"})
         assert blocked.status_code == 429

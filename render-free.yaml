@@ -15,8 +15,6 @@ services:
         value: production
       - key: SECRET_KEY
         generateValue: true
-      - key: FORWARDED_ALLOW_IPS
-        value: "*"
       - key: WEBHOOK_SECRET
         generateValue: true
       - key: DEMO_PASSWORD

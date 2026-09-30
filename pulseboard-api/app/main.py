@@ -124,9 +124,10 @@ def _demo_snapshot(session_id: str) -> dict:
 @app.post("/api/v1/demo/session")
 def create_demo_session(request: Request):
     now = time.time()
-    # Render terminates TLS at its trusted proxy and supplies a single client IP.
-    # Do not trust arbitrary X-Forwarded-For chains from public callers.
-    ip = request.headers.get("x-real-ip", "").strip() or (request.client.host if request.client else "unknown")
+    # Render places the real client address first in X-Forwarded-For before the
+    # request reaches the app. Use only that first proxy-added address.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    ip = forwarded.split(",", 1)[0].strip() or (request.client.host if request.client else "unknown")
     with _demo_lock:
         for expired in [key for key, value in _demo_sessions.items() if value["expires_at"] <= now]:
             _demo_sessions.pop(expired, None)
