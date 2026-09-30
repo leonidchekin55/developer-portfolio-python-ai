@@ -40,6 +40,8 @@ def test_openrouter_mode_falls_back_without_secret(monkeypatch):
     assert rag.effective_rag_mode() == "extractive"
     monkeypatch.setattr(rag.settings, "rag_mode", "extractive")
     monkeypatch.setattr(rag.settings, "openrouter_api_key", "configured")
+    assert rag.effective_rag_mode() == "extractive"
+    monkeypatch.setattr(rag.settings, "rag_mode", "openrouter")
     assert rag.effective_rag_mode() == "openrouter"
     monkeypatch.setattr(rag.settings, "rag_mode", "groq")
     monkeypatch.setattr(rag.settings, "openrouter_api_key", "")

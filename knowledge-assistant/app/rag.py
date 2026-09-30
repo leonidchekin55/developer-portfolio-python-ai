@@ -53,8 +53,6 @@ def effective_rag_mode() -> str:
         return "openrouter" if settings.openrouter_api_key.strip() else "extractive"
     if settings.rag_mode == "openrouter":
         return "openrouter" if settings.openrouter_api_key.strip() else "extractive"
-    if settings.rag_mode == "extractive" and settings.openrouter_api_key.strip():
-        return "openrouter"
     return settings.rag_mode
 
 
