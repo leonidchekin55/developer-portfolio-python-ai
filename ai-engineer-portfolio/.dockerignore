@@ -1,5 +1,6 @@
 .env
 .railway-demo.env
+.render-demo.env
 .git
 .venv
 __pycache__
