@@ -124,14 +124,18 @@ def _demo_snapshot(session_id: str) -> dict:
 @app.post("/api/v1/demo/session")
 def create_demo_session(request: Request):
     now = time.time()
-    forwarded = request.headers.get("x-forwarded-for", "")
-    ip = forwarded.split(",", 1)[0].strip() or (request.client.host if request.client else "unknown")
+    # Render terminates TLS at its trusted proxy and supplies a single client IP.
+    # Do not trust arbitrary X-Forwarded-For chains from public callers.
+    ip = request.headers.get("x-real-ip", "").strip() or (request.client.host if request.client else "unknown")
     with _demo_lock:
         for expired in [key for key, value in _demo_sessions.items() if value["expires_at"] <= now]:
             _demo_sessions.pop(expired, None)
-        recent = [stamp for stamp in _demo_ip_windows.get(ip, []) if now - stamp < 3600]
+        for address in [address for address, stamps in _demo_ip_windows.items() if not stamps or now - stamps[-1] >= 3600]:
+            _demo_ip_windows.pop(address, None)
+        recent = _demo_ip_windows.setdefault(ip, [])
+        recent[:] = [stamp for stamp in recent if now - stamp < 3600]
         if len(recent) >= 12: raise HTTPException(429, "Too many demo sessions; try again later")
-        recent.append(now); _demo_ip_windows[ip] = recent
+        recent.append(now)
         session_id = secrets.token_urlsafe(24)
         expires_at = int(now + _DEMO_TTL)
         project_id = str(uuid4()); assistant_id = str(uuid4())

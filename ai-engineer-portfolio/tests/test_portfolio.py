@@ -306,3 +306,13 @@ def test_public_sandbox_limits_inputs_and_isolates_sessions(client,monkeypatch):
     assert client.post("/sandbox/run/05",headers=b,json={}).json()["session_records"]["documents"]==0
     monkeypatch.setattr(settings,"llm_mode","openai")
     assert client.post("/sandbox/run/04",headers=a,json={}).status_code==503
+
+
+def test_sandbox_session_limit_cannot_be_evaded_with_forwarded_headers(client,monkeypatch):
+    import sandbox
+    monkeypatch.setattr(settings,"llm_mode","mock")
+    monkeypatch.setattr(sandbox,"_starts",{})
+    for index in range(30):
+        response=client.post("/sandbox/session",headers={"X-Forwarded-For":f"198.51.100.{index}"})
+        assert response.status_code==200
+    assert client.post("/sandbox/session",headers={"X-Forwarded-For":"203.0.113.4"}).status_code==429
