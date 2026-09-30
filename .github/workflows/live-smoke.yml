@@ -1,10 +1,11 @@
 name: Live portfolio smoke checks
 
 on:
-  workflow_run:
-    workflows: [Portfolio CI]
-    types: [completed]
+  push:
     branches: [codex/ai-engineer-render-free]
+    paths:
+      - 'scripts/live_smoke.py'
+      - '.github/workflows/live-smoke.yml'
   workflow_dispatch:
 
 permissions:
@@ -16,26 +17,41 @@ concurrency:
 
 jobs:
   live-smoke:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'codex/ai-engineer-render-free') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the tested revision
-        if: ${{ github.event_name == 'workflow_run' }}
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
-      - name: Check out the selected branch for manual runs
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@v4
-        with:
-          ref: codex/ai-engineer-render-free
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Exercise public mock deployment
+      - name: Wait for CI and exercise the public mock deployment
         env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
           PORTFOLIO_BASE_URL: https://leonid-ai-engineer-portfolio.onrender.com
-        run: python scripts/live_smoke.py
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+          repo, sha = os.environ['GH_REPOSITORY'], os.environ['GH_SHA']
+          token = os.environ['GH_TOKEN']
+          deadline = time.monotonic() + 900
+          while time.monotonic() < deadline:
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=100',
+                  headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  runs = json.load(response)['workflow_runs']
+              ci = next((run for run in runs if run['name'] == 'Portfolio CI' and run['event'] == 'push'), None)
+              if ci and ci['status'] == 'completed':
+                  if ci['conclusion'] != 'success':
+                      raise SystemExit(f"Portfolio CI failed: {ci['html_url']}")
+                  print(f"Portfolio CI succeeded: {ci['html_url']}")
+                  break
+              print('Waiting for Portfolio CI to finish...', flush=True)
+              time.sleep(15)
+          else:
+              raise SystemExit('Timed out waiting for Portfolio CI')
+          PY
+          python scripts/live_smoke.py
