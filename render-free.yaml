@@ -47,3 +47,28 @@ services:
         value: "10"
       - key: SESSION_SECRET
         generateValue: true
+
+  - type: web
+    name: leonid-ai-engineer-portfolio
+    runtime: docker
+    plan: free
+    dockerfilePath: ./ai-engineer-portfolio/Dockerfile
+    dockerContext: ./ai-engineer-portfolio
+    healthCheckPath: /05-production/ready
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:////tmp/portfolio.db
+      - key: UPLOAD_DIR
+        value: /tmp/portfolio-uploads
+      - key: LLM_MODE
+        value: mock
+      - key: EMBEDDING_MODE
+        value: hash
+      - key: CELERY_ENABLED
+        value: "false"
+      - key: API_TOKEN
+        generateValue: true
+      - key: READER_API_TOKEN
+        generateValue: true

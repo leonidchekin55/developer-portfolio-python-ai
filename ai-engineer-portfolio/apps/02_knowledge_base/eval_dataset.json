@@ -1,0 +1,25 @@
+{
+  "version": "retrieval-v1",
+  "language": "ru",
+  "description": "Synthetic Russian paraphrase queries for comparing lexical and multilingual embedding retrieval. No personal data.",
+  "documents": [
+    {"id": "password-reset", "text": "Чтобы восстановить доступ к учётной записи, запросите письмо для сброса пароля на подтверждённый адрес электронной почты."},
+    {"id": "queue-retry", "text": "Если брокер сообщений Redis временно недоступен, задача останется в очереди и будет обработана после восстановления соединения."},
+    {"id": "human-approval", "text": "Записывающее действие агента не выполняется автоматически: оператор должен проверить черновик и подтвердить его."},
+    {"id": "ephemeral-storage", "text": "Файловая система бесплатного веб-сервиса временная. Загруженные файлы могут исчезнуть после перезапуска или нового развёртывания."},
+    {"id": "vector-index", "text": "PostgreSQL с расширением pgvector использует индекс HNSW для ускорения поиска ближайших векторов."},
+    {"id": "document-status", "text": "Сервис обработки документов возвращает состояния queued, processing, processed и failed, которые клиент может опрашивать через API."},
+    {"id": "citations", "text": "Ответ базы знаний включает название исходного файла и номер найденного фрагмента, чтобы читатель мог проверить контекст."},
+    {"id": "rate-limit", "text": "Публичная демо-сессия ограничена тридцатью запросами в минуту и автоматически удаляется после периода бездействия."}
+  ],
+  "queries": [
+    {"id": "q-password", "text": "Я забыл секретную комбинацию, как снова попасть в профиль?", "relevant_document_id": "password-reset"},
+    {"id": "q-queue", "text": "Что произойдёт с работой, когда посредник сообщений отключится?", "relevant_document_id": "queue-retry"},
+    {"id": "q-approval", "text": "Может ли помощник сам изменить запись в CRM без человека?", "relevant_document_id": "human-approval"},
+    {"id": "q-storage", "text": "Останутся ли мои загруженные материалы после обновления приложения?", "relevant_document_id": "ephemeral-storage"},
+    {"id": "q-vector", "text": "Как база данных быстрее находит похожие смысловые представления текста?", "relevant_document_id": "vector-index"},
+    {"id": "q-status", "text": "Как узнать, завершилась ли обработка файла или возникла ошибка?", "relevant_document_id": "document-status"},
+    {"id": "q-citation", "text": "Как проверить, откуда взялся ответ и где в исходнике это написано?", "relevant_document_id": "citations"},
+    {"id": "q-rate-limit", "text": "Когда временная демо-сессия закончится и сколько действий разрешено?", "relevant_document_id": "rate-limit"}
+  ]
+}

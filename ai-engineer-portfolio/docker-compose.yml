@@ -1,0 +1,86 @@
+services:
+  api:
+    build:
+      context: .
+      args:
+        INSTALL_SEMANTIC: ${INSTALL_SEMANTIC:-false}
+    environment:
+      DATABASE_URL: postgresql+psycopg://portfolio:${POSTGRES_PASSWORD:-portfolio_dev}@db:5432/portfolio
+      REDIS_URL: redis://redis:6379/0
+      CELERY_ENABLED: ${CELERY_ENABLED:-true}
+      EMBEDDING_MODE: ${EMBEDDING_MODE:-hash}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      APP_ENV: ${APP_ENV:-development}
+      LLM_MODE: ${LLM_MODE:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      API_TOKEN: ${API_TOKEN:-demo-token-change-me}
+      READER_API_TOKEN: ${READER_API_TOKEN:-reader-token}
+      UPLOAD_DIR: /app/data/uploads
+    volumes: ["./data:/app/data"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/05-production/ready')"]
+      interval: 20s
+      timeout: 4s
+      retries: 5
+    restart: unless-stopped
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: portfolio
+      POSTGRES_USER: portfolio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-portfolio_dev}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U portfolio"], interval: 5s, timeout: 3s, retries: 10}
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redis_data:/data"]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10}
+    restart: unless-stopped
+  worker:
+    build:
+      context: .
+      args:
+        INSTALL_SEMANTIC: ${INSTALL_SEMANTIC:-false}
+    command: ["celery", "-A", "apps.03_document_processor.worker:celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://portfolio:${POSTGRES_PASSWORD:-portfolio_dev}@db:5432/portfolio
+      REDIS_URL: redis://redis:6379/0
+      CELERY_ENABLED: "true"
+      UPLOAD_DIR: /app/data/uploads
+      LLM_MODE: ${LLM_MODE:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      EMBEDDING_MODE: ${EMBEDDING_MODE:-hash}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+    volumes: ["./data:/app/data"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A apps.03_document_processor.worker:celery_app inspect ping --timeout=5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+  nginx:
+    image: nginx:stable-alpine
+    ports: ["${HTTP_PORT:-8080}:80"]
+    volumes: ["./apps/05-production/nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+    depends_on: [api]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/05-production/ready >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  redis_data:
+  postgres_data:

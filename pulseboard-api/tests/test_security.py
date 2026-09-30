@@ -29,3 +29,13 @@ async def test_task_creation_rejects_cross_tenant_project():
     with pytest.raises(HTTPException) as error:
         await create_task(TaskIn(project_id=42, title="Cross tenant"), user, FakeDb())
     assert error.value.status_code == 404
+
+
+def test_production_requires_unique_long_secrets():
+    from app.core.config import Settings
+    with pytest.raises(ValueError, match="SECRET_KEY"):
+        Settings(app_env="production", secret_key="unsafe-demo-secret", webhook_secret="w"*40)
+    with pytest.raises(ValueError, match="WEBHOOK_SECRET"):
+        Settings(app_env="production", secret_key="s"*40, webhook_secret="local-demo-webhook-secret")
+    configured=Settings(app_env="production", secret_key="s"*40, webhook_secret="w"*40)
+    assert configured.app_env == "production"

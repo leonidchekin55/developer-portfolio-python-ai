@@ -8,6 +8,7 @@ Two runnable portfolio projects covering multi-tenant API design and document-gr
 |---|---|---|
 | **Pulseboard API** — SaaS projects and tasks | [Open API](https://portfolio-pulseboard-demo.onrender.com) | [Swagger UI](https://portfolio-pulseboard-demo.onrender.com/docs) |
 | **Knowledge Assistant** — document search with cited sources | [Open app](https://portfolio-knowledge-demo.onrender.com) | [Swagger UI](https://portfolio-knowledge-demo.onrender.com/docs) |
+| **AI Engineer Portfolio** — six applied AI demos | [Narrated tour](https://leonid-portfolio.onrender.com/ai-engineer-tour.html) · [Interactive sandbox](https://leonid-ai-engineer-portfolio.onrender.com/sandbox) | [Source + docs](https://github.com/leonidchekin55/developer-portfolio-python-ai/tree/codex/ai-engineer-render-free) |
 
 The hosted instances run on Render Free, may sleep when idle, and can reset ephemeral data. Knowledge Assistant supports PostgreSQL through `DATABASE_URL`, but persistence in the hosted instance is not yet verified. Do not rely on account or history persistence until the PostgreSQL connection is confirmed. The hosted assistant uses lexical retrieval and an optional OpenRouter free-model route; the local profile adds Ollama generation and Qdrant vector search. See [deployment notes](./RENDER.md).
 
@@ -22,6 +23,7 @@ The hosted instances run on Render Free, may sleep when idle, and can reset ephe
 ![Pulseboard Swagger UI](./media/pulseboard-openapi.png)
 
 [Watch the 14-second product tour](./media/portfolio-demo.webm) · [Architecture and design decisions](./ARCHITECTURE.md)
+The AI Engineer portfolio also has a [Russian narrated tour with captions](https://leonid-portfolio.onrender.com/ai-engineer-tour.html) and a six-scenario [interactive sandbox](https://leonid-ai-engineer-portfolio.onrender.com/sandbox). Three one-page, role-targeted resumes (AI/RAG, backend, and English ATS) can be downloaded from the [portfolio resume section](https://leonid-portfolio.onrender.com/#resume).
 
 ## What each project demonstrates
 
@@ -98,3 +100,9 @@ The root [GitHub Actions workflow](./.github/workflows/ci.yml) runs backend test
 - [Free Render Blueprint](./render-free.yaml)
 
 This is a portfolio demonstration, not a production service. The free hosted demos are intentionally small; each project README describes the security and operational work needed before real customer data is used.
+
+The AI portfolio branch also runs [public post-deploy smoke checks](./.github/workflows/live-smoke.yml) after its CI succeeds; the checks use only isolated mock sessions and remove them afterward. For a concise, honest demo script and interview answers, see the [AI Engineer interview guide](./docs/AI_ENGINEER_INTERVIEW_GUIDE_RU.md). The six-project repository contains its own optional [semantic retrieval evaluation](./ai-engineer-portfolio/docs/retrieval-evaluation.json).
+
+## Application AI Engineer portfolio
+
+The [six-project portfolio](./ai-engineer-portfolio/README.md) is available as a separate Render Free demo. Install optional local FastEmbed retrieval with `.[semantic]`; the small synthetic benchmark and limitations are documented in its README. See the interview guide, retrieval report, and post-deploy live-smoke workflow before presenting it. Three one-page role-specific resume variants (AI/RAG, backend, English ATS) are in [`resumes/`](./resumes/).

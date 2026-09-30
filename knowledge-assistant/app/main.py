@@ -27,6 +27,7 @@ from app.rag import ask, index_document, _term_weights, effective_rag_mode
 SESSION_COOKIE = "knowbase_session"
 SESSION_TTL = 30 * 24 * 60 * 60
 SESSION_SECRET = settings.session_secret or secrets.token_urlsafe(48)
+DEMO_ALLOWED_ORIGIN = "https://portfolio-knowledge-demo.onrender.com"
 MAX_DOCUMENTS_PER_USER = 10
 _auth_attempts: dict[str, list[float]] = {}
 
@@ -107,8 +108,22 @@ def _set_session_cookie(response: Response, request: Request, user_id: int) -> N
     )
 
 
+def _check_same_origin(request: Request) -> None:
+    origin = request.headers.get("origin")
+    if origin is None:
+        return
+    allowed_origins = {DEMO_ALLOWED_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"}
+    if origin not in allowed_origins:
+        raise HTTPException(403, "Запрос с этого сайта запрещён.")
+
+
 def _check_auth_rate_limit(request: Request) -> None:
     now = time.monotonic()
+    origin = request.headers.get("origin")
+    # Cookie-authenticated writes are same-origin only; allow the deployed UI and local dev UI.
+    allowed_origins = {DEMO_ALLOWED_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"}
+    if origin and origin not in allowed_origins:
+        raise HTTPException(403, "Запрос с этого сайта запрещён.")
     address = request.client.host if request.client else "unknown"
     recent = [stamp for stamp in _auth_attempts.get(address, []) if now - stamp < 900]
     if len(recent) >= 12:
@@ -201,6 +216,7 @@ async def login(data: AccountInput, request: Request, response: Response, db: As
 
 @app.post("/api/v1/auth/logout", status_code=204)
 def logout(request: Request, response: Response):
+    _check_same_origin(request)
     secure = request.url.scheme == "https" or request.url.hostname not in {"localhost", "127.0.0.1", "testserver"}
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, secure=secure, samesite="strict")
 
@@ -215,12 +231,14 @@ async def who_am_i(user_id: int | None = Depends(current_user_id), db: AsyncSess
 
 @app.post("/api/v1/documents")
 async def upload(
+    request: Request,
     file: UploadFile = File(...),
     user_id: int | None = Depends(current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     if user_id is None:
         raise HTTPException(401, "Войдите или создайте аккаунт, чтобы загрузить документ.")
+    _check_same_origin(request)
     count = await db.scalar(select(func.count()).select_from(Document).where(Document.user_id == user_id))
     if count >= MAX_DOCUMENTS_PER_USER:
         raise HTTPException(413, f"В одном аккаунте можно хранить не более {MAX_DOCUMENTS_PER_USER} документов.")
@@ -231,7 +249,16 @@ async def upload(
     if len(content) > settings.max_upload_mb * 1024 * 1024:
         raise HTTPException(413, "Размер файла превышает допустимый лимит.")
     safe_name = Path(file.filename or "upload").name
-    path = Path(settings.upload_dir) / f"{os.urandom(8).hex()}_{safe_name}"
+    if not content:
+        raise HTTPException(422, "Файл пуст.")
+    if extension == ".txt":
+        try:
+            content.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise HTTPException(415, "TXT-файл должен быть в кодировке UTF-8.") from error
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    path = upload_dir / f"{os.urandom(8).hex()}_{safe_name}"
     path.write_bytes(content)
     document = Document(filename=safe_name, status="indexing", user_id=user_id)
     db.add(document)
@@ -275,9 +302,11 @@ async def documents(user_id: int | None = Depends(current_user_id), db: AsyncSes
 @app.delete("/api/v1/documents/{document_id}", status_code=204)
 async def delete_document(
     document_id: int,
+    request: Request,
     user_id: int | None = Depends(current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    _check_same_origin(request)
     if user_id is None:
         raise HTTPException(401, "Войдите, чтобы удалить документ.")
     document = await db.scalar(select(Document).where(Document.id == document_id, Document.user_id == user_id))
@@ -306,9 +335,11 @@ async def delete_document(
 @app.post("/api/v1/chat")
 async def chat(
     data: Question,
+    request: Request,
     user_id: int | None = Depends(current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    _check_same_origin(request)
     try:
         answer, sources = await ask(data.question, user_id=user_id)
     except httpx.HTTPStatusError as error:

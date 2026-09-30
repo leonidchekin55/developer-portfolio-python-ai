@@ -1,0 +1,57 @@
+name: Live portfolio smoke checks
+
+on:
+  push:
+    branches: [codex/ai-engineer-render-free]
+    paths:
+      - 'scripts/live_smoke.py'
+      - '.github/workflows/live-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-portfolio-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Wait for CI and exercise the public mock deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          PORTFOLIO_BASE_URL: https://leonid-ai-engineer-portfolio.onrender.com
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+          repo, sha = os.environ['GH_REPOSITORY'], os.environ['GH_SHA']
+          token = os.environ['GH_TOKEN']
+          deadline = time.monotonic() + 900
+          while time.monotonic() < deadline:
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=100',
+                  headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  runs = json.load(response)['workflow_runs']
+              ci = next((run for run in runs if run['name'] == 'Portfolio CI' and run['event'] == 'push'), None)
+              if ci and ci['status'] == 'completed':
+                  if ci['conclusion'] != 'success':
+                      raise SystemExit(f"Portfolio CI failed: {ci['html_url']}")
+                  print(f"Portfolio CI succeeded: {ci['html_url']}")
+                  break
+              print('Waiting for Portfolio CI to finish...', flush=True)
+              time.sleep(15)
+          else:
+              raise SystemExit('Timed out waiting for Portfolio CI')
+          PY
+          python scripts/live_smoke.py
