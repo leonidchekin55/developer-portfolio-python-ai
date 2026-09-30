@@ -20,6 +20,7 @@ _boot = time.monotonic()
 _MAX_SESSIONS = 500
 _TTL = 30 * 60
 _PER_MINUTE = 30
+_SESSION_STARTS_PER_HOUR = 30
 
 class DemoInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -71,7 +72,7 @@ def create_session(request: Request):
         starts = _starts.setdefault(peer, deque())
         while starts and now - starts[0] > 3600:
             starts.popleft()
-        if len(starts) >= 10:
+        if len(starts) >= _SESSION_STARTS_PER_HOUR:
             raise HTTPException(429, "Слишком много новых демо-сессий с этого подключения. Попробуйте позже.")
         starts.append(now)
         _purge(now)
@@ -79,9 +80,6 @@ def create_session(request: Request):
         _sessions[ident] = {"created": now, "seen": now, "calls": deque(), "leads": [], "documents": [],
                             "approvals": {}, "audit": deque(maxlen=100), "evals": 0}
     return {"session_id": ident, "expires_in_seconds": _TTL, "mode": "isolated mock", "external_actions": False}
-
-def _session_header(x_demo_session: str | None = Header(default=None, alias="X-Demo-Session")) -> str | None:
-    return x_demo_session
 
 @router.post("/run/{project}")
 def run_demo(project: str, body: DemoInput, session_id: str | None = Header(default=None, alias="X-Demo-Session")):

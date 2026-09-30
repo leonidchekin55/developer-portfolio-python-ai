@@ -10,6 +10,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]
+semantic = ["fastembed==0.7.4"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
@@ -25,4 +26,4 @@ include = ["apps*", "shared*"]
 py-modules = ["main", "sandbox", "mcp_server"]
 
 [tool.setuptools.package-data]
-apps = ["04_evals/dataset.json"]
+apps = ["04_evals/dataset.json", "02_knowledge_base/eval_dataset.json"]

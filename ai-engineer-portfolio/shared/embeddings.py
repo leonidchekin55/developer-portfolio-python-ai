@@ -1,5 +1,6 @@
 from __future__ import annotations
 import hashlib, math, re
+from functools import lru_cache
 import httpx
 from .core import settings
 DIMENSIONS=384
@@ -20,8 +21,22 @@ def _features(text:str)->list[float]:
     norm=math.sqrt(sum(x*x for x in vector))
     return [x/norm for x in vector] if norm else vector
 
-def embed_texts(texts:list[str])->list[list[float]]:
+@lru_cache(maxsize=1)
+def _local_semantic_model(model_name:str):
+    try:
+        from fastembed import TextEmbedding
+    except ImportError as exc:
+        raise RuntimeError("Local semantic embeddings require `pip install -e '.[semantic]'`.") from exc
+    return TextEmbedding(model_name=model_name,threads=2)
+
+def embed_texts(texts:list[str],*,input_type:str="passage")->list[list[float]]:
+    if input_type not in {"query","passage"}:
+        raise ValueError("input_type must be query or passage")
     if settings.embedding_mode=="hash": return [_features(text) for text in texts]
+    if settings.embedding_mode=="fastembed":
+        model=_local_semantic_model(settings.fastembed_model)
+        method=model.query_embed if input_type=="query" else model.passage_embed
+        return [[float(value) for value in vector] for vector in method(texts)]
     if not settings.openai_api_key: raise RuntimeError("OPENAI_API_KEY is required when EMBEDDING_MODE=openai")
     result=[]
     for start in range(0,len(texts),64):

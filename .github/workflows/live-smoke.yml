@@ -1,0 +1,41 @@
+name: Live portfolio smoke checks
+
+on:
+  workflow_run:
+    workflows: [Portfolio CI]
+    types: [completed]
+    branches: [codex/ai-engineer-render-free]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-portfolio-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  live-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'codex/ai-engineer-render-free') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tested revision
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Check out the selected branch for manual runs
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          ref: codex/ai-engineer-render-free
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exercise public mock deployment
+        env:
+          PORTFOLIO_BASE_URL: https://leonid-ai-engineer-portfolio.onrender.com
+        run: python scripts/live_smoke.py

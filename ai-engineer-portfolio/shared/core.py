@@ -24,12 +24,13 @@ class Settings(BaseSettings):
     celery_enabled: bool = False
     embedding_mode: str = "hash"
     embedding_model: str = "text-embedding-3-small"
+    fastembed_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @model_validator(mode="after")
     def validate_settings(self):
-        if self.embedding_mode not in {"hash", "openai"}:
-            raise ValueError("EMBEDDING_MODE must be hash or openai")
+        if self.embedding_mode not in {"hash", "openai", "fastembed"}:
+            raise ValueError("EMBEDDING_MODE must be hash, openai or fastembed")
         if self.llm_mode not in {"mock", "openai"}:
             raise ValueError("LLM_MODE must be mock or openai")
         if self.api_token == self.reader_api_token:
@@ -68,6 +69,7 @@ class DocumentChunk(Base):
     owner: Mapped[str] = mapped_column(String, index=True)
     ordinal: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
+    embedding_mode: Mapped[str] = mapped_column(String, default="hash", server_default="hash")
     embedding: Mapped[list] = mapped_column(Vector(384).with_variant(JSON(), "sqlite"))
 class Approval(Base):
     __tablename__ = "approvals"
@@ -119,6 +121,11 @@ def init_db():
         if "processing_error" not in columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE documents ADD COLUMN processing_error VARCHAR"))
+    if "document_chunks" in inspect(engine).get_table_names():
+        columns={column["name"] for column in inspect(engine).get_columns("document_chunks")}
+        if "embedding_mode" not in columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE document_chunks ADD COLUMN embedding_mode VARCHAR NOT NULL DEFAULT 'hash'"))
 def user_from_token(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401,"Bearer token required")

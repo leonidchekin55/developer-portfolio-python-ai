@@ -173,6 +173,54 @@ def test_local_embedding_vectors_are_normalized_and_repeatable():
     assert first==second and len(first)==384
     assert abs(cosine_similarity(first,second)-1)<1e-9
 
+def test_fastembed_uses_query_and_passage_encoder(monkeypatch):
+    import shared.embeddings as embeddings
+    class FakeModel:
+        def __init__(self): self.calls=[]
+        def query_embed(self,texts): self.calls.append(("query",texts)); return [[0.25,0.75]]
+        def passage_embed(self,texts): self.calls.append(("passage",texts)); return [[1,0]]
+    model=FakeModel()
+    monkeypatch.setattr(settings,"embedding_mode","fastembed")
+    monkeypatch.setattr(embeddings,"_local_semantic_model",lambda name:model)
+    assert embeddings.embed_texts(["question"],input_type="query")==[[0.25,0.75]]
+    assert embeddings.embed_texts(["document"],input_type="passage")==[[1.0,0.0]]
+    assert model.calls==[("query",["question"]),("passage",["document"])]
+
+def test_reindex_changes_vector_backend_without_mixing_spaces(client,monkeypatch):
+    from importlib import import_module
+    kb=import_module("apps.02_knowledge_base.main")
+    inserted=client.post("/02-knowledge-base/documents",headers=ADMIN,json={"filename":"backend.txt","text":"База данных хранит заказ в PostgreSQL."})
+    ident=inserted.json()["id"]
+    before=client.post("/02-knowledge-base/search",headers=ADMIN,json={"question":"Где хранится заказ?"}).json()
+    assert before["results"]
+    monkeypatch.setattr(settings,"embedding_mode","fastembed")
+    monkeypatch.setattr(kb,"embed_texts",lambda texts,input_type="passage":[[1.0]+[0.0]*383 for _ in texts])
+    excluded=client.post("/02-knowledge-base/search",headers=ADMIN,json={"question":"Где хранится заказ?"}).json()
+    assert excluded["results"]==[]
+    rebuilt=client.post(f"/02-knowledge-base/documents/{ident}/reindex",headers=ADMIN)
+    assert rebuilt.status_code==200 and rebuilt.json()["embedding_mode"]=="fastembed"
+    after=client.post("/02-knowledge-base/search",headers=ADMIN,json={"question":"Где хранится заказ?"}).json()
+    assert after["results"] and "embeddings=fastembed" in after["retrieval"]
+
+def test_old_document_chunk_schema_gets_embedding_mode_migration(tmp_path):
+    from sqlalchemy import create_engine,text,inspect
+    import shared.core as core
+    legacy=create_engine(f"sqlite:///{tmp_path/'legacy_chunks.db'}")
+    with legacy.begin() as connection:
+        connection.execute(text("CREATE TABLE document_chunks (id VARCHAR PRIMARY KEY, document_id VARCHAR, owner VARCHAR, ordinal INTEGER, content TEXT, embedding JSON)"))
+    original=core.engine; core.engine=legacy
+    try:
+        core.init_db()
+        columns={column["name"] for column in inspect(legacy).get_columns("document_chunks")}
+        assert "embedding_mode" in columns
+    finally:
+        core.engine=original; legacy.dispose()
+
+def test_retrieval_eval_metrics_are_calculated_correctly():
+    from runpy import run_path
+    evaluator=run_path(str(Path(__file__).parents[1]/"scripts"/"evaluate_retrieval.py"))
+    assert evaluator["metrics"]([["a","b"],["c","b"]],["a","b"])=={"recall_at_1":0.5,"recall_at_3":1.0,"mrr":0.75}
+
 def test_openai_structured_output_and_tool_call_contract(monkeypatch):
     import json
     import shared.llm as llm

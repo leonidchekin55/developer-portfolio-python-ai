@@ -1,12 +1,16 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      args:
+        INSTALL_SEMANTIC: ${INSTALL_SEMANTIC:-false}
     environment:
       DATABASE_URL: postgresql+psycopg://portfolio:${POSTGRES_PASSWORD:-portfolio_dev}@db:5432/portfolio
       REDIS_URL: redis://redis:6379/0
       CELERY_ENABLED: ${CELERY_ENABLED:-true}
       EMBEDDING_MODE: ${EMBEDDING_MODE:-hash}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       APP_ENV: ${APP_ENV:-development}
       LLM_MODE: ${LLM_MODE:-mock}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -40,7 +44,10 @@ services:
     healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10}
     restart: unless-stopped
   worker:
-    build: .
+    build:
+      context: .
+      args:
+        INSTALL_SEMANTIC: ${INSTALL_SEMANTIC:-false}
     command: ["celery", "-A", "apps.03_document_processor.worker:celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
     environment:
       DATABASE_URL: postgresql+psycopg://portfolio:${POSTGRES_PASSWORD:-portfolio_dev}@db:5432/portfolio
@@ -52,6 +59,7 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       EMBEDDING_MODE: ${EMBEDDING_MODE:-hash}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
     volumes: ["./data:/app/data"]
     depends_on:
       db: {condition: service_healthy}

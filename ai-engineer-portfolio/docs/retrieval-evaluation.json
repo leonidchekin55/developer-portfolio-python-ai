@@ -1,0 +1,135 @@
+{
+  "dataset_version": "retrieval-v1",
+  "queries": 8,
+  "documents": 8,
+  "embedding_mode": "fastembed",
+  "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "fastembed_version": "0.7.4",
+  "metrics": {
+    "lexical_bm25_like": {
+      "recall_at_1": 0.5,
+      "recall_at_3": 0.625,
+      "mrr": 0.6344
+    },
+    "dense_retrieval": {
+      "recall_at_1": 0.625,
+      "recall_at_3": 0.875,
+      "mrr": 0.75
+    }
+  },
+  "cases": [
+    {
+      "query": "Я забыл секретную комбинацию, как снова попасть в профиль?",
+      "relevant": "password-reset",
+      "lexical_top3": [
+        "citations",
+        "document-status",
+        "ephemeral-storage"
+      ],
+      "dense_top3": [
+        "password-reset",
+        "ephemeral-storage",
+        "queue-retry"
+      ]
+    },
+    {
+      "query": "Что произойдёт с работой, когда посредник сообщений отключится?",
+      "relevant": "queue-retry",
+      "lexical_top3": [
+        "queue-retry",
+        "citations",
+        "document-status"
+      ],
+      "dense_top3": [
+        "queue-retry",
+        "rate-limit",
+        "document-status"
+      ]
+    },
+    {
+      "query": "Может ли помощник сам изменить запись в CRM без человека?",
+      "relevant": "human-approval",
+      "lexical_top3": [
+        "citations",
+        "document-status",
+        "ephemeral-storage"
+      ],
+      "dense_top3": [
+        "password-reset",
+        "document-status",
+        "queue-retry"
+      ]
+    },
+    {
+      "query": "Останутся ли мои загруженные материалы после обновления приложения?",
+      "relevant": "ephemeral-storage",
+      "lexical_top3": [
+        "ephemeral-storage",
+        "citations",
+        "document-status"
+      ],
+      "dense_top3": [
+        "ephemeral-storage",
+        "queue-retry",
+        "document-status"
+      ]
+    },
+    {
+      "query": "Как база данных быстрее находит похожие смысловые представления текста?",
+      "relevant": "vector-index",
+      "lexical_top3": [
+        "citations",
+        "document-status",
+        "ephemeral-storage"
+      ],
+      "dense_top3": [
+        "citations",
+        "vector-index",
+        "document-status"
+      ]
+    },
+    {
+      "query": "Как узнать, завершилась ли обработка файла или возникла ошибка?",
+      "relevant": "document-status",
+      "lexical_top3": [
+        "citations",
+        "document-status",
+        "ephemeral-storage"
+      ],
+      "dense_top3": [
+        "citations",
+        "ephemeral-storage",
+        "document-status"
+      ]
+    },
+    {
+      "query": "Как проверить, откуда взялся ответ и где в исходнике это написано?",
+      "relevant": "citations",
+      "lexical_top3": [
+        "citations",
+        "human-approval",
+        "document-status"
+      ],
+      "dense_top3": [
+        "citations",
+        "human-approval",
+        "password-reset"
+      ]
+    },
+    {
+      "query": "Когда временная демо-сессия закончится и сколько действий разрешено?",
+      "relevant": "rate-limit",
+      "lexical_top3": [
+        "rate-limit",
+        "ephemeral-storage",
+        "citations"
+      ],
+      "dense_top3": [
+        "rate-limit",
+        "queue-retry",
+        "ephemeral-storage"
+      ]
+    }
+  ],
+  "note": "Small synthetic diagnostic set; results are not a general quality guarantee."
+}

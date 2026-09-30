@@ -73,8 +73,10 @@ jobs:
           wheel=glob.glob('dist/*.whl')[0];
           sdist=glob.glob('dist/*.tar.gz')[0];
           assert 'apps/04_evals/dataset.json' in zipfile.ZipFile(wheel).namelist();
+          assert 'apps/02_knowledge_base/eval_dataset.json' in zipfile.ZipFile(wheel).namelist();
           assert 'sandbox.py' in zipfile.ZipFile(wheel).namelist();
           assert any(name.endswith('apps/04_evals/dataset.json') for name in tarfile.open(sdist).getnames());
+          assert any(name.endswith('apps/02_knowledge_base/eval_dataset.json') for name in tarfile.open(sdist).getnames());
           assert any(name.endswith('sandbox.py') for name in tarfile.open(sdist).getnames());
-          print('wheel and sdist include eval dataset and public sandbox')"
+          print('wheel and sdist include eval datasets and public sandbox')"
       - run: docker build -t ai-engineer-portfolio .
