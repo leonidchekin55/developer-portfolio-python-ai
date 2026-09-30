@@ -1,0 +1,11 @@
+.env
+.railway-demo.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.db
+/data/
+.coverage
+
+*.egg-info/
