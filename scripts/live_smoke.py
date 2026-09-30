@@ -49,7 +49,7 @@ def main()->int:
         print("WAIT",error,flush=True); time.sleep(delay); delay=min(12,delay+2)
     check(ready.get("llm_mode")=="mock","service is in mock mode; no paid model can be called")
     for path in ("/","/sandbox","/01-lead-manager/docs","/02-knowledge-base/docs","/03-document-processor/docs","/04-evals/docs","/05-production/ready","/06-secure-agent/docs"):
-        status,_=request(path)
+        status,_=request(path,timeout=60)
         check(status==200,f"GET {path}")
     status,page=request("/sandbox")
     check(status==200 and "API_TOKEN" not in str(page) and "leonid-portfolio" not in str(page),"public sandbox does not expose credentials")
