@@ -216,6 +216,7 @@ async def login(data: AccountInput, request: Request, response: Response, db: As
 
 @app.post("/api/v1/auth/logout", status_code=204)
 def logout(request: Request, response: Response):
+    _check_same_origin(request)
     secure = request.url.scheme == "https" or request.url.hostname not in {"localhost", "127.0.0.1", "testserver"}
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, secure=secure, samesite="strict")
 
