@@ -46,6 +46,8 @@ def test_knowledge_base_is_scoped_and_cites_source(client):
     assert found["citations"]==["guide.txt · фрагмент 1"]
     other=client.post("/02-knowledge-base/search",headers=READER,json={"question":"Пакет Pro"}).json()
     assert other["results"]==[]
+    foreign=client.get(f"/02-knowledge-base/documents",headers=READER).json()
+    assert all(row["filename"]!="guide.txt" for row in foreign)
 
 def test_document_processor_reports_real_status(client,tmp_path,monkeypatch):
     monkeypatch.setattr(settings,"upload_dir",str(tmp_path))
@@ -61,7 +63,22 @@ def test_eval_uses_reference_metric_and_persists(client):
     r=client.post("/04-evals/run",headers=ADMIN,json={"models":["mock"]})
     assert r.status_code==200 and r.json()["count"]==3
     assert all(0<=item["quality_f1"]<=1 for item in r.json()["results"])
+    assert all(item["quality_f1"]>0 for item in r.json()["results"])
+    assert all(item["trace"]["context"] and item["trace"]["output"] for item in r.json()["results"])
+    assert r.json()["by_model"][0]["mean_quality_f1"]>0
     assert client.get("/04-evals/runs",headers=ADMIN).status_code==200
+
+def test_ops_config_never_returns_secret_values(client):
+    response=client.get("/05-production/ops/config",headers=ADMIN)
+    assert response.status_code==200
+    assert "api_token" not in response.text.casefold()
+    assert "openai_api_key" not in response.text.casefold()
+
+def test_document_processor_does_not_expose_another_owner_document(client,tmp_path,monkeypatch):
+    monkeypatch.setattr(settings,"upload_dir",str(tmp_path))
+    uploaded=client.post("/03-document-processor/batch",headers=ADMIN,files=[("files",("private.txt",b"private admin note","text/plain"))])
+    ident=uploaded.json()["documents"][0]["id"]
+    assert client.get(f"/03-document-processor/documents/{ident}",headers=READER).status_code==404
 
 def test_secure_agent_requires_role_and_approval(client):
     assert client.post("/06-secure-agent/agent",headers=READER,json={"message":"Создай заметку"}).status_code==403

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from shared.core import create_app,get_db,EvalRun,user_from_token,settings
 from shared.llm import complete
 app=create_app("04 · AI Benchmark & Evals","Versioned dataset, repeatable model runs, reference overlap, estimated cost, latency and traces")
-DATA=Path(__file__).with_name("dataset.json"); PROMPT_VERSION="v1.2"
+DATA=Path(__file__).with_name("dataset.json"); PROMPT_VERSION="v1.3"
 # Editable pricing assumptions for gpt-4o-mini, USD per million tokens; label remains estimated.
 PRICING={"gpt-4o-mini":(0.15,0.60)}
 class RunRequest(BaseModel): models:list[str]=Field(default_factory=lambda:["mock"],min_length=1,max_length=5)
@@ -38,11 +38,13 @@ def run(body:RunRequest,db:Session=Depends(get_db),actor:str=Depends(user_from_t
         for model in body.models:
             provider_model=None if model=="mock" else model
             for item in items:
-                prompt=f"Answer using the provided support information. Prompt {PROMPT_VERSION}. {item['input']}"
+                prompt=(f"Answer the question using only the support information below. "
+                        f"Prompt {PROMPT_VERSION}.\nQuestion: {item['input']}\n"
+                        f"Support information: {item['context']}")
                 started=time.perf_counter(); output=complete(prompt,provider_model); latency=int((time.perf_counter()-started)*1000)
                 answer=output["text"]; quality=reference_f1(answer,item["expected"])
                 cost=0.0 if model=="mock" else token_cost(model,output.get("usage",{}))
-                trace={"input":item["input"],"output":answer,"expected":item["expected"],"provider_model":output["model"],"prompt_version":PROMPT_VERSION,"estimated_cost_usd":cost,"usage":output.get("usage",{}),"cost_is_estimate":True}
+                trace={"input":item["input"],"context":item["context"],"output":answer,"expected":item["expected"],"provider_model":output["model"],"prompt_version":PROMPT_VERSION,"estimated_cost_usd":cost,"usage":output.get("usage",{}),"cost_is_estimate":True}
                 row=EvalRun(dataset=item["id"],model=model,prompt_version=PROMPT_VERSION,quality=quality,cost_usd=cost if cost is not None else 0.0,latency_ms=latency,trace=trace)
                 db.add(row); db.flush()
                 results.append({"id":row.id,"case":item["id"],"model":model,"quality_f1":quality,"estimated_cost_usd":cost,"latency_ms":latency,"trace":trace})

@@ -18,7 +18,12 @@ class LeadClassification(BaseModel):
 def complete(prompt: str, model: str | None = None) -> dict:
     """OpenAI-compatible provider, or deterministic local response without network access."""
     if settings.llm_mode != "openai":
-        return {"text": f"Демо-ответ: обработан запрос ({prompt[:160]})", "model":"mock", "usage":{"prompt_tokens":len(prompt)//4,"completion_tokens":30}}
+        # Eval prompts carry a clearly delimited source passage. Echoing that
+        # passage makes the offline benchmark deterministic and meaningfully
+        # comparable with its reference answer without calling a paid API.
+        support_marker = "Support information: "
+        answer = prompt.rsplit(support_marker, 1)[1].strip() if support_marker in prompt else f"Демо-ответ: обработан запрос ({prompt[:160]})"
+        return {"text": answer, "model":"mock", "usage":{"prompt_tokens":len(prompt)//4,"completion_tokens":max(1,len(answer)//4)}}
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required when LLM_MODE=openai")
     response=httpx.post("https://api.openai.com/v1/chat/completions", headers={"Authorization":f"Bearer {settings.openai_api_key}"}, json={"model":model or settings.openai_model,"messages":[{"role":"user","content":prompt}],"temperature":0}, timeout=httpx.Timeout(30, connect=5))
