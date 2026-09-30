@@ -50,3 +50,29 @@ jobs:
           cache-dependency-path: knowledge-assistant/web/package.json
       - run: npm install
       - run: npm run build
+
+  ai-engineer-portfolio:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-engineer-portfolio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-engineer-portfolio/pyproject.toml
+      - run: pip install -e ".[test]" build
+      - run: pytest -q
+      - run: python -c "import main; print('application imports')"
+      - run: python -m build --sdist --wheel
+      - name: Verify distribution includes the eval dataset
+        run: >-
+          python -c "import glob, tarfile, zipfile;
+          wheel=glob.glob('dist/*.whl')[0];
+          sdist=glob.glob('dist/*.tar.gz')[0];
+          assert 'apps/04_evals/dataset.json' in zipfile.ZipFile(wheel).namelist();
+          assert any(name.endswith('apps/04_evals/dataset.json') for name in tarfile.open(sdist).getnames());
+          print('wheel and sdist include eval dataset')"
+      - run: docker build -t ai-engineer-portfolio .
