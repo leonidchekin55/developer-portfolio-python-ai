@@ -1,6 +1,6 @@
 # Python Backend & Applied AI Portfolio
 
-Two runnable portfolio projects covering multi-tenant API design and document-grounded AI. Both have a free hosted demo and a fuller local Docker Compose profile.
+Three runnable portfolio projects covering multi-tenant APIs, document-grounded AI, and six applied AI demos. Each has a free hosted demo and a local development profile.
 
 ## Live demos
 
