@@ -33,12 +33,11 @@ services:
     healthCheckPath: /health/ready
     envVars:
       - key: DATABASE_URL
-        # Set in the Render dashboard to the Supabase Session Pooler URI.
-        sync: false
+        value: sqlite+aiosqlite:////tmp/knowledge.db
       - key: REDIS_URL
         value: ""
       - key: RAG_MODE
-        value: openrouter
+        value: extractive
       - key: OPENROUTER_API_KEY
         sync: false
       - key: UPLOAD_DIR
