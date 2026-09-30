@@ -21,5 +21,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["apps*", "shared*"]
 
+[tool.setuptools]
+py-modules = ["main", "sandbox", "mcp_server"]
+
 [tool.setuptools.package-data]
 apps = ["04_evals/dataset.json"]
