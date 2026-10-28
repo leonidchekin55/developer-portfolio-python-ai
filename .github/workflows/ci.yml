@@ -43,13 +43,16 @@ jobs:
         working-directory: knowledge-assistant/web
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: knowledge-assistant/web/package.json
-      - run: npm install
-      - run: npm run build
+          cache: pnpm
+          cache-dependency-path: knowledge-assistant/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
 
   ai-engineer-portfolio:
     runs-on: ubuntu-latest
@@ -95,13 +98,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: knowledge-assistant/web/package.json
+          cache: pnpm
+          cache-dependency-path: knowledge-assistant/web/pnpm-lock.yaml
       - name: Validate website pages and linked assets
         run: node scripts/check_website.mjs https://leonid-portfolio.onrender.com/
       - name: Build knowledge-base interface
         working-directory: knowledge-assistant/web
-        run: npm install && npm run build
+        run: pnpm install --frozen-lockfile && pnpm run build
