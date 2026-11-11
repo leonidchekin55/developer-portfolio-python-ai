@@ -1,5 +1,7 @@
 import asyncio
 import json
+import re
+from collections import Counter
 from types import SimpleNamespace
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -32,6 +34,45 @@ def test_extractive_answers_include_source(monkeypatch, tmp_path):
     assert "[Источник 1]" in answer
     assert sources[0]["filename"] == "demo-guide.txt"
     assert sources[0]["page"] == 2
+
+
+def test_search_recognizes_word_forms_in_existing_indexes(monkeypatch, tmp_path):
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'legacy-index.db'}")
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    sample = (
+        "Knowbase принимает PDF, DOCX и TXT. При загрузке документ разбивается на фрагменты, "
+        "а ответы содержат имя файла и номер страницы. В бесплатном демо поиск выполняется "
+        "локально по словам и показывает исходный фрагмент без внешней языковой модели."
+    )
+
+    async def check():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        async with session_factory() as db:
+            document = Document(filename="demo-guide.txt", status="indexed", chunk_count=1)
+            db.add(document)
+            await db.flush()
+            # Existing rows contain the original, unstemmed index terms.
+            legacy_terms = dict(Counter(re.findall(r"[a-zа-яё0-9]{2,}", sample.lower())))
+            db.add(DocumentChunk(document_id=document.id, page=1, chunk_index=0, text=sample,
+                                 terms_json=json.dumps(legacy_terms, ensure_ascii=False)))
+            await db.commit()
+        monkeypatch.setattr(rag, "Session", session_factory)
+        for question in (
+            "О чём говорится во встроенном документе?",
+            "Что умеет Knowledge Assistant?",
+            "Какие форматы документов поддерживаются?",
+            "Как получить ответ с источниками?",
+            "Как работает поиск по документам?",
+        ):
+            answer, sources = await rag._ask_extractive(question)
+            assert sources and sources[0]["filename"] == "demo-guide.txt", question
+            assert "[Источник 1]" in answer
+        _, unrelated = await rag._ask_extractive("Сколько стоит аренда квартиры в Москве?")
+        assert unrelated == []
+        await engine.dispose()
+
+    asyncio.run(check())
 
 
 def test_openrouter_mode_falls_back_without_secret(monkeypatch):
