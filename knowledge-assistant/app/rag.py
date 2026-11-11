@@ -3,9 +3,11 @@ import math
 import re
 import uuid
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 import httpx
+import snowballstemmer
 from docx import Document as DocxDocument
 from pypdf import PdfReader
 from qdrant_client import QdrantClient, models
@@ -118,6 +120,32 @@ def _term_weights(text: str):
     return dict(Counter(re.findall(r"[a-zа-яё0-9]{2,}", text.lower())))
 
 
+_STOP_WORDS = frozenset({
+    "а", "без", "в", "во", "для", "до", "за", "из", "или", "к", "как", "какая", "какие", "какой",
+    "на", "над", "не", "но", "о", "об", "от", "по", "под", "при", "про", "со", "у", "что", "чем",
+    "это", "the", "a", "an", "and", "or", "is", "are", "of", "in", "on", "to", "for", "what", "how",
+})
+
+
+@lru_cache(maxsize=16384)
+def _stem_token(token: str) -> str:
+    token = token.replace("ё", "е")
+    if re.fullmatch(r"[а-я]+", token):
+        return snowballstemmer.stemmer("russian").stemWord(token)
+    if re.fullmatch(r"[a-z]+", token):
+        return snowballstemmer.stemmer("english").stemWord(token)
+    return token
+
+
+def _normalized_terms(terms: dict) -> dict:
+    """Normalize at query time, including legacy indexes, without rewriting data."""
+    result = Counter()
+    for token, count in terms.items():
+        if token not in _STOP_WORDS:
+            result[_stem_token(token)] += count
+    return dict(result)
+
+
 def _similarity(left: dict, right: dict):
     if not left or not right:
         return 0.0
@@ -128,7 +156,11 @@ def _similarity(left: dict, right: dict):
 
 
 async def _retrieve_extractive(question: str, user_id: int | None = None):
-    terms = _term_weights(question)
+    raw_terms = _term_weights(question)
+    # The public example uses the product's other name, Knowbase.
+    if {"knowledge", "assistant"}.issubset(raw_terms):
+        raw_terms["knowbase"] = 1
+    terms = _normalized_terms(raw_terms)
     if not terms:
         return []
     async with Session() as db:
@@ -149,7 +181,7 @@ async def _retrieve_extractive(question: str, user_id: int | None = None):
             if chunk.document_id not in filenames:
                 document = await db.get(Document, chunk.document_id)
                 filenames[chunk.document_id] = document.filename if document else "document"
-    hits = sorted(((_similarity(terms, json.loads(chunk.terms_json or "{}")), chunk) for chunk in chunks),
+    hits = sorted(((_similarity(terms, _normalized_terms(json.loads(chunk.terms_json or "{}"))), chunk) for chunk in chunks),
                   key=lambda item: item[0], reverse=True)[:3]
     return [{"filename": filenames.get(chunk.document_id, "document"), "page": chunk.page,
              "text": chunk.text[:1200], "score": round(score, 4)}
